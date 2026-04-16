@@ -47,7 +47,7 @@ const API_BASE_URL = (import.meta as any)?.env?.VITE_API_BASE_URL ||
   (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:8001'
     : (window.location.hostname.includes('github.io') 
-        ? 'https://jichuang-me-stock-highlights.hf.space' // 修正为 jichuang-me 的后端
+        ? 'https://jichuang123-stock-backend.hf.space' // 最终固化 jichuang123 的后端
         : window.location.origin)); 
 
 type SearchStock = {
@@ -822,8 +822,8 @@ export default function StockHighlightsPrototype() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">个股智策 <span className="mx-1 text-slate-300 font-light">|</span> <span className="text-slate-500 font-medium">穿透式投研终端</span></h1>
-                <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-[10px] py-0 px-2 font-bold text-blue-700 uppercase tracking-wider animate-pulse">
-                  Terminal v4.1.5 RECOVERY-FIX
+                <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-[10px] py-0 px-2 font-bold text-emerald-700 uppercase tracking-wider animate-pulse">
+                  Terminal v4.2.0 FINAL
                 </Badge>
               </div>
               <p className="mt-0.5 text-xs font-medium text-slate-400">
