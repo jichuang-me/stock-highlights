@@ -18,6 +18,14 @@ app = FastAPI(title="Stock Highlights Real Data Backend")
 async def startup_event():
     logger.info("Backend service starting up on cloud environment...")
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Stock Highlights API is Running",
+        "endpoints": ["/api/highlights", "/api/search", "/api/health"],
+        "status": "active"
+    }
+
 # 允许跨域
 app.add_middleware(
     CORSMiddleware,
