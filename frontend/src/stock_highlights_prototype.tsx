@@ -357,36 +357,23 @@ function HighlightCard({
         ${diff === 'worse' ? 'border-red-400' : ''}
       `}
     >
-      {diff && (
-        <div className="absolute -top-2 -right-2 z-10">
-          <Badge className={`rounded-full border-2 
-            ${diff === 'new' ? 'bg-amber-500 text-white' : ''}
-            ${diff === 'better' ? 'bg-emerald-500 text-white' : ''}
-            ${diff === 'worse' ? 'bg-red-500 text-white' : ''}
-            ${diff === 'changed' ? 'bg-blue-500 text-white' : ''}
-          `}>
-            {diff.toUpperCase()}
-          </Badge>
-        </div>
-      )}
       <div className="mb-3 flex items-center justify-end">
         <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => onOpen(item)}>
           查看详情
         </Button>
       </div>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={`rounded-full ${style.badge}`}>
-              {style.label}
-            </Badge>
-            <span className="text-xs text-slate-400">更新 {item.history?.[0]?.date || '未知'}</span>
-            <Badge variant="secondary" className="rounded-full">
-              {item.category}
-            </Badge>
-            <Badge variant="outline" className={`rounded-full ${item.side === 'risk' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
-              {priorityLabel}
-            </Badge>
+            <div className={`mt-0.5 rounded-2xl p-2 ${style.chip}`}>
+              <Icon className="h-4 w-4" />
+            </div>
+            {diff && (
+              <Badge variant="outline" className={`rounded-full ${sideStyle[item.side].badge}`}>
+                {diff.toUpperCase()}
+              </Badge>
+            )}
             {statusBadge && (
               <Badge variant="outline" className={`rounded-full ${statusBadge.className}`}>
                 {statusBadge.label}
@@ -399,11 +386,8 @@ function HighlightCard({
               Score {item.score}
             </Badge>
           </div>
-          </div>
+          
           <div className="mt-3 flex items-start gap-3">
-            <div className={`mt-0.5 rounded-2xl p-2 ${style.chip}`}>
-              <Icon className="h-4 w-4" />
-            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <div className="text-xl font-semibold tracking-tight">{item.label}</div>
