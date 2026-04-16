@@ -5,7 +5,18 @@ import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+import sys
+import logging
+
+# 配置日志输出到 stdout 以便在云端查看
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Stock Highlights Real Data Backend")
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Backend service starting up on cloud environment...")
 
 # 允许跨域
 app.add_middleware(

@@ -13,6 +13,7 @@ COPY . .
 
 # Hugging Face Spaces 默认监听 7860 端口
 ENV PORT=7860
+ENV PYTHONUNBUFFERED=1
 
-# 启动命令
-CMD ["python", "app.py"]
+# 使用生产级别的 uvicorn 启动方式，这在 Hugging Face 容器中更稳定
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
