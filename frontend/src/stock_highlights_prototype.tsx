@@ -28,8 +28,10 @@ import { Badge } from './components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './components/ui/accordion';
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
+  Scatter,
   XAxis,
   YAxis,
   Tooltip,
@@ -133,7 +135,9 @@ type StockResponse = {
     time: string;
     url: string;
     source: string;
+    tag?: string;
   }[];
+  priceHistory?: { date: string; price: number }[];
 };
 
 type StockViewModel = {
@@ -148,7 +152,7 @@ type StockViewModel = {
   outlook: Outlook;
   highlights: HighlightItem[];
   radar: Array<{ k: string; v: number }>;
-  trend: Array<{ date: string; risk: number; positive: number }>;
+  trend: Array<{ date: string; risk: number; positive: number; price?: number; isEvent?: boolean }>;
   xueqiu?: {
     popularity: number;
     followers: number;
@@ -160,14 +164,17 @@ type StockViewModel = {
     time: string;
     url: string;
     source: string;
+    tag?: string;
   }[];
+  priceHistory?: { date: string; price: number }[];
 };
 
 type SnapshotPoint = {
-  snapshotDate: string;
-  riskScore: number;
-  positiveScore: number;
-  headline?: string;
+  id: string;
+  timestamp: string;
+  summary: Summary;
+  highlights: HighlightItem[];
+  price?: number;
 };
 
 async function apiRequest<T>(path: string): Promise<T> {
@@ -190,6 +197,13 @@ const stockHighlightsApi = {
   },
   getStockSnapshots(code: string) {
     return apiRequest<SnapshotPoint[]>(`/api/stocks/${encodeURIComponent(code)}/snapshots`);
+  },
+  saveSnapshot(code: string, data: any) {
+    return fetch(`${API_BASE_URL}/api/stocks/${encodeURIComponent(code)}/snapshots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(res => res.json());
   },
   getStockHistory(code: string) {
     return apiRequest<HistoryItem[]>(`/api/stocks/${encodeURIComponent(code)}/history`);
@@ -287,21 +301,32 @@ function getDefaultRadarFromSummary(summary?: Summary) {
   ];
 }
 
-function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle?: string }) {
+function SectionTitle({ icon: Icon, title, subtitle, action }: { icon: any; title: string; subtitle?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="rounded-2xl bg-slate-100 p-2">
-        <Icon className="h-5 w-5" />
+    <div className="flex items-start justify-between">
+      <div className="flex items-start gap-3">
+        <div className="rounded-2xl bg-slate-100 p-2">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+          {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        </div>
       </div>
-      <div>
-        <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
-        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
-      </div>
+      {action && <div>{action}</div>}
     </div>
   );
 }
 
-function HighlightCard({ item, onOpen }: { item: HighlightItem; onOpen: (item: HighlightItem) => void }) {
+function HighlightCard({ 
+  item, 
+  onOpen, 
+  diff 
+}: { 
+  item: HighlightItem; 
+  onOpen: (item: HighlightItem) => void;
+  diff?: 'new' | 'changed' | 'removed' | 'better' | 'worse' | null;
+}) {
   const style = sideStyle[item.side];
   const Icon = style.icon;
   const statusBadge = getLatestHistoryBadge(item);
@@ -325,8 +350,25 @@ function HighlightCard({ item, onOpen }: { item: HighlightItem; onOpen: (item: H
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-3xl border p-4 transition hover:border-slate-300 hover:shadow-sm md:p-5 ${isResolved ? 'bg-slate-50 opacity-60' : ''}`}
+      className={`relative rounded-3xl border p-4 transition hover:border-slate-300 hover:shadow-sm md:p-5 
+        ${isResolved ? 'bg-slate-50 opacity-60' : ''}
+        ${diff === 'new' ? 'border-amber-400 bg-amber-50/20' : ''}
+        ${diff === 'better' ? 'border-emerald-400' : ''}
+        ${diff === 'worse' ? 'border-red-400' : ''}
+      `}
     >
+      {diff && (
+        <div className="absolute -top-2 -right-2 z-10">
+          <Badge className={`rounded-full border-2 
+            ${diff === 'new' ? 'bg-amber-500 text-white' : ''}
+            ${diff === 'better' ? 'bg-emerald-500 text-white' : ''}
+            ${diff === 'worse' ? 'bg-red-500 text-white' : ''}
+            ${diff === 'changed' ? 'bg-blue-500 text-white' : ''}
+          `}>
+            {diff.toUpperCase()}
+          </Badge>
+        </div>
+      )}
       <div className="mb-3 flex items-center justify-end">
         <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => onOpen(item)}>
           查看详情
@@ -353,6 +395,10 @@ function HighlightCard({ item, onOpen }: { item: HighlightItem; onOpen: (item: H
             <Badge variant="outline" className="rounded-full">
               影响度 {scoreToStars(item.stars)}
             </Badge>
+            <Badge variant="outline" className="rounded-full bg-slate-900 text-white border-none">
+              Score {item.score}
+            </Badge>
+          </div>
           </div>
           <div className="mt-3 flex items-start gap-3">
             <div className={`mt-0.5 rounded-2xl p-2 ${style.chip}`}>
@@ -530,6 +576,12 @@ export default function StockHighlightsPrototype() {
   const [sortMode, setSortMode] = useState('score');
   const [activeHighlight, setActiveHighlight] = useState<HighlightItem | null>(null);
   
+  // 快照与对比系统 (v4.0)
+  const [snapshots, setSnapshots] = useState<SnapshotPoint[]>([]);
+  const [compareBase, setCompareBase] = useState<SnapshotPoint | null>(null);
+  const [isSnapshotDrawerOpen, setIsSnapshotDrawerOpen] = useState(false);
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+
   // 搜索相关项
   const [searchResults, setSearchResults] = useState<SearchStock[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -593,6 +645,31 @@ export default function StockHighlightsPrototype() {
     };
   }, [quickSearchInput, isQuickSearching]);
 
+  // 加载快照列表
+  const loadSnapshots = async (code: string) => {
+    try {
+      const data = await stockHighlightsApi.getStockSnapshots(code);
+      setSnapshots(data || []);
+    } catch {}
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!stockState.data || !selectedCode) return;
+    setIsSavingSnapshot(true);
+    try {
+      await stockHighlightsApi.saveSnapshot(selectedCode, {
+        summary: stockState.data.summary,
+        highlights: stockState.data.highlights,
+        price: stockState.data.price
+      });
+      await loadSnapshots(selectedCode);
+    } catch (err) {
+      alert("快照保存失败");
+    } finally {
+      setIsSavingSnapshot(false);
+    }
+  };
+
 
   useEffect(() => {
     if (!selectedCode) {
@@ -626,12 +703,21 @@ export default function StockHighlightsPrototype() {
             outlook: highlightsRes.outlook,
             highlights: highlightsRes.highlights || [],
             radar: highlightsRes.radar?.length ? highlightsRes.radar : getDefaultRadarFromSummary(highlightsRes.summary),
-            trend: (snapshots || []).map(p => ({
-              date: String(p.snapshotDate).slice(5),
-              risk: p.riskScore,
-              positive: p.positiveScore,
-            })),
-            xueqiu: highlightsRes.xueqiu
+            trend: (highlightsRes.priceHistory || []).map(p => {
+              const histDate = p.date.slice(5); // MM-DD
+              // 寻找当天的历史记录（若有更新则标记为事件）
+              const isEvent = (history || []).some(h => h.date === p.date);
+              return {
+                date: histDate,
+                price: p.price,
+                risk: highlightsRes.summary.totalRiskScore, // 默认显示当前分值，后续可扩展历史分值回溯
+                positive: highlightsRes.summary.totalPositiveScore,
+                isEvent: isEvent
+              };
+            }),
+            priceHistory: highlightsRes.priceHistory,
+            xueqiu: highlightsRes.xueqiu,
+            liveNews: highlightsRes.liveNews
           }
         });
       } catch (err: any) {
@@ -641,6 +727,8 @@ export default function StockHighlightsPrototype() {
       }
     }
     fetchAll();
+    loadSnapshots(selectedCode);
+    setCompareBase(null); // 切换股票时重置对比
     return () => { ignore = true; };
   }, [selectedCode]);
 
@@ -668,6 +756,29 @@ export default function StockHighlightsPrototype() {
       return sortMode === 'stars' ? b.stars - a.stars : b.score - a.score;
     });
   }, [stockState.data, sideFilter, sortMode]);
+
+  // 对比算法 (v4.0)
+  const getHighlightDiff = (item: HighlightItem) => {
+    if (!compareBase) return null;
+    const oldItem = compareBase.highlights.find(h => h.id === item.id);
+    if (!oldItem) return 'new';
+    
+    if (item.side === 'risk') {
+      if (item.score > oldItem.score) return 'worse';
+      if (item.score < oldItem.score) return 'better';
+    } else {
+      if (item.score > oldItem.score) return 'better';
+      if (item.score < oldItem.score) return 'worse';
+    }
+    
+    if (item.why !== oldItem.why || item.interpretation !== oldItem.interpretation) return 'changed';
+    return null;
+  };
+
+  const removedHighlights = useMemo(() => {
+    if (!compareBase || !stockState.data) return [];
+    return compareBase.highlights.filter(oh => !stockState.data?.highlights.some(nh => nh.id === oh.id));
+  }, [compareBase, stockState.data]);
 
   const latestChanges = useMemo(() => stockState.history.slice(0, 8), [stockState.history]);
 
@@ -933,6 +1044,24 @@ export default function StockHighlightsPrototype() {
                        <div className="text-xs text-slate-400"><span className="font-bold text-white tracking-widest uppercase">Popularity:</span> No.{stockState.data.xueqiu?.rank || 'N/A'}</div>
                     </div>
                   </div>
+                  <div className="mt-6 flex flex-wrap gap-4 pt-4 border-t border-slate-800">
+                    <Button 
+                      onClick={() => setIsSnapshotDrawerOpen(true)}
+                      className="rounded-xl bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+                    >
+                      <History className="mr-2 h-4 w-4 text-indigo-400" />
+                      时光机历史
+                      {snapshots.length > 0 && <Badge className="ml-2 bg-indigo-500/20 text-indigo-400">{snapshots.length}</Badge>}
+                    </Button>
+                    <Button 
+                      onClick={handleSaveSnapshot}
+                      disabled={isSavingSnapshot}
+                      className="rounded-xl bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+                    >
+                      {isSavingSnapshot ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock3 className="mr-2 h-4 w-4 text-emerald-400" />}
+                      封存当前快照
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
 
@@ -941,13 +1070,26 @@ export default function StockHighlightsPrototype() {
                   <CardHeader><SectionTitle icon={BarChart3} title="情报趋势" /></CardHeader>
                   <CardContent className="h-[280px] p-4">
                     <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-                      <LineChart data={stockState.data.trend || []}>
-                        <XAxis dataKey="date" tick={{fontSize: 10}} />
-                        <YAxis tick={{fontSize: 10}} />
-                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                        <Line type="stepAfter" name="风险" dataKey="risk" stroke="#ef4444" strokeWidth={3} dot={false} />
-                        <Line type="stepAfter" name="亮点" dataKey="positive" stroke="#10b981" strokeWidth={3} dot={false} />
-                      </LineChart>
+                      <ComposedChart data={stockState.data.trend || []}>
+                        <defs>
+                          <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" tick={{fontSize: 9}} minTickGap={30} />
+                        <YAxis yAxisId="left" tick={{fontSize: 10}} domain={[0, 100]} />
+                        <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#3b82f6'}} domain={['auto', 'auto']} hide={false} />
+                        <Tooltip 
+                          contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255,255,255,0.95)'}} 
+                          itemStyle={{fontSize: '12px', fontWeight: 'bold'}}
+                        />
+                        <Area yAxisId="right" type="monotone" dataKey="price" stroke="#3b82f6" fillOpacity={1} fill="url(#colorPrice)" name="股价反向" />
+                        <Line yAxisId="left" type="stepAfter" name="风险分" dataKey="risk" stroke="#ef4444" strokeWidth={2} dot={false} />
+                        <Line yAxisId="left" type="stepAfter" name="亮点分" dataKey="positive" stroke="#10b981" strokeWidth={2} dot={false} />
+                        {/* 事件锚点标记 */}
+                        <Scatter yAxisId="left" data={stockState.data.trend.filter(t => t.isEvent)} fill="#f59e0b" name="研判节点" />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
@@ -977,18 +1119,33 @@ export default function StockHighlightsPrototype() {
                 <CardContent className="space-y-4">
                   <Accordion type="multiple" defaultValue={["risk", "positive"]} className="w-full space-y-3">
                     <AccordionItem value="risk" className="rounded-2xl border">
-                      <AccordionTrigger className="px-4 text-base font-semibold">风险看点</AccordionTrigger>
+                      <AccordionTrigger className="px-4 text-base font-semibold">分析面：潜在隐忧与风险线索</AccordionTrigger>
                       <AccordionContent className="space-y-4 px-2 pb-2">
-                        {filteredHighlights.filter((i) => i.side === 'risk').map((item) => <HighlightCard key={item.id} item={item} onOpen={setActiveHighlight} />)}
+                        {filteredHighlights.filter((i) => i.side === 'risk').map((item) => (
+                          <HighlightCard key={item.id} item={item} onOpen={setActiveHighlight} diff={getHighlightDiff(item)} />
+                        ))}
                       </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="positive" className="rounded-2xl border">
-                      <AccordionTrigger className="px-4 text-base font-semibold">亮点看点</AccordionTrigger>
+                      <AccordionTrigger className="px-4 text-base font-semibold">基本面：价值亮点与博弈机会</AccordionTrigger>
                       <AccordionContent className="space-y-4 px-2 pb-2">
-                        {filteredHighlights.filter((i) => i.side === 'positive').map((item) => <HighlightCard key={item.id} item={item} onOpen={setActiveHighlight} />)}
+                        {filteredHighlights.filter((i) => i.side === 'positive').map((item) => (
+                          <HighlightCard key={item.id} item={item} onOpen={setActiveHighlight} diff={getHighlightDiff(item)} />
+                        ))}
                       </AccordionContent>
                     </AccordionItem>
                   </Accordion>
+
+                  {compareBase && removedHighlights.length > 0 && (
+                    <div className="mt-8 pt-8 border-t border-dashed">
+                      <div className="mb-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-2">已消失/已解除的旧看点 (对比历史镜像)</div>
+                      <div className="space-y-4 opacity-50 grayscale">
+                        {removedHighlights.map((item) => (
+                          <HighlightCard key={`removed-${item.id}`} item={item} onOpen={setActiveHighlight} diff="removed" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1220,6 +1377,73 @@ export default function StockHighlightsPrototype() {
         )}
 
         <HighlightDialog item={activeHighlight} onClose={() => setActiveHighlight(null)} />
+
+        {/* 研究时光机抽屉 - v4.0 Final */}
+        <Dialog open={isSnapshotDrawerOpen} onOpenChange={setIsSnapshotDrawerOpen}>
+          <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-white/95 backdrop-blur-xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-2xl font-black">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-500 text-white shadow-lg">
+                  <History size={20} />
+                </div>
+                <span>研究时光机</span>
+              </DialogTitle>
+              <DialogDescription className="text-sm font-medium text-slate-500 mt-2">
+                对比不同研究阶段的情报镜像，捕捉基本面核心因子的量化演变。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-6 space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+              {snapshots.length === 0 ? (
+                <div className="py-16 text-center text-slate-400">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-50">
+                    <Clock3 className="h-8 w-8 text-slate-200" />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-widest mb-1">NO_HISTORICAL_RECORD</div>
+                  <p className="text-xs">点击下方按钮保存当前情报作为历史基准点</p>
+                </div>
+              ) : (
+                snapshots.map((snap) => (
+                  <div 
+                    key={snap.id} 
+                    className={`group relative rounded-2xl border p-4 transition-all duration-300 hover:shadow-md cursor-pointer
+                      ${compareBase?.id === snap.id ? 'border-indigo-500 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-500/20' : 'hover:border-indigo-200 bg-white'}
+                    `}
+                    onClick={() => {
+                      setCompareBase(snap);
+                      setIsSnapshotDrawerOpen(false);
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <div className="text-sm font-black text-slate-800 font-mono tracking-tight">{snap.timestamp}</div>
+                        <div className="flex gap-2">
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-red-200 bg-red-50 text-red-600 font-black">
+                            RISK {snap.summary.riskCount}
+                          </Badge>
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-emerald-200 bg-emerald-50 text-emerald-600 font-black">
+                            POS {snap.summary.positiveCount}
+                          </Badge>
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-slate-200 bg-slate-50 text-slate-600 font-black">
+                            PE {snap.price || 'N/A'}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className={`h-8 w-8 rounded-xl flex items-center justify-center transition-all ${compareBase?.id === snap.id ? 'bg-indigo-500 text-white scale-110 shadow-lg' : 'bg-slate-50 text-slate-300 group-hover:bg-indigo-100 group-hover:text-indigo-500'}`}>
+                        {compareBase?.id === snap.id ? <Zap size={14} /> : <ChevronRight size={14} />}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-8 flex gap-3">
+               <Button className="flex-1 rounded-2xl h-12 text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xl" onClick={handleSaveSnapshot} disabled={isSavingSnapshot}>
+                 {isSavingSnapshot ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Clock3 className="h-4 w-4 mr-2" />}
+                 记录当前最新镜像
+               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

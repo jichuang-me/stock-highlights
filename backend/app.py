@@ -2,6 +2,7 @@ import datetime as dt
 import re
 from typing import List, Dict, Any, Optional
 import requests
+import json
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from concurrent.futures import ThreadPoolExecutor
@@ -22,32 +23,9 @@ app = FastAPI(title="Stock Highlights Real Data Backend")
 @app.on_event("startup")
 async def startup_event():
     logger.info("Backend service starting up on cloud environment...")
-
-# 托管前端静态文件 (由 Docker 构建阶段产出到 dist 目录)
-# 只有当 dist 目录存在时才挂载，防止本地开发环境报错
-dist_path = os.path.join(os.path.dirname(__file__), "dist")
-if os.path.exists(dist_path):
-    app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        # 排除 API 请求
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404)
-        
-        # 尝试返回具体文件，否则返回 index.html (支持 React Router)
-        file_path = os.path.join(dist_path, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(dist_path, "index.html"))
-else:
-    @app.get("/")
-    async def root():
-        return {
-            "message": "Stock Highlights API is Running (Static UI not built)",
-            "endpoints": ["/api/highlights", "/api/search", "/api/health"],
-            "status": "active"
-        }
+    # 确保存储目录存在
+    if not os.path.exists("data"):
+        os.makedirs("data")
 
 # 允许跨域
 app.add_middleware(
@@ -57,8 +35,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- 模拟环境注入 (雪球 Session 管理) ---
+XQ_SESSION = requests.Session()
+XQ_SESSION.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+})
+
+def init_xq_session():
+    try:
+        XQ_SESSION.get("https://xueqiu.com/", timeout=5)
+    except:
+        pass
+
+init_xq_session()
+
 # --- 情报引擎 v3.0：结构化事件模型与博弈逻辑库 ---
-# 对应架构第 3 & 4 层：事件识别与看点生成
 EVENT_CATALOG = {
     "DEBT_RISK": {
         "label": "债务逾期/违约",
@@ -110,13 +101,13 @@ EVENT_CATALOG = {
     }
 }
 
+# --- 抓取适配阶层 ---
+
 @lru_cache(maxsize=128)
 def fetch_announcements(code: str, days: int = 180) -> List[Dict]:
     url = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
-    # 强制锁定 2026 年最新公告
     end_date = dt.date.today()
-    start_date = dt.date(2026, 3, 1)  # 强制从 3 月开始，过滤 1 月旧记录
-    
+    start_date = dt.date(2026, 3, 1)
     payload = {
         "pageNum": 1, "pageSize": 50, "column": "szse", "tabName": "fulltext",
         "plate": "sh" if code.startswith("6") else "sz",
@@ -127,447 +118,250 @@ def fetch_announcements(code: str, days: int = 180) -> List[Dict]:
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "X-Requested-With": "XMLHttpRequest"
     }
-    
     try:
         resp = requests.post(url, data=payload, timeout=10)
-        resp.raise_for_status()
         data = resp.json().get("announcements") or []
         return [a for a in data if a.get("secCode") == code]
-    except Exception:
+    except:
         return []
 
 def get_pdf_url(adjunct_url: str) -> str:
     return f"https://static.cninfo.com.cn/{adjunct_url}" if adjunct_url else ""
 
-# --- 业务逻辑：核心聚合 ---
-@lru_cache(maxsize=128)
-def fetch_eastmoney_news(name: str, code: str) -> List[Dict]:
-    """获取东财资讯/研报"""
-    url = "https://mkapi2.dfcfs.com/finskillshub/api/claw/news-search"
-    payload = {"query": f"{name} {code} 研报", "page": 1, "size": 5}
-    headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-    try:
-        resp = requests.post(url, json=payload, timeout=5)
-        data = resp.json().get("list") or []
-        return data
-    except:
-        return []
-
 @lru_cache(maxsize=128)
 def fetch_eastmoney_indicators(code: str) -> Dict[str, Any]:
-    """获取东财个股核心量化指标 (修正单位换算)"""
     market = "1" if code.startswith("6") else "0"
-    # f162: PE(Dynamic), f167: PB, f168: Turnover, f183: ROE-TTM (通常在不同字段)
-    url = f"http://push2.eastmoney.com/api/qt/stock/get?secid={market}.{code}&fields=f162,f43,f167,f168,f116,f117"
+    url = f"http://push2.eastmoney.com/api/qt/stock/get?secid={market}.{code}&fields=f162,f43,f167,f117"
     try:
         resp = requests.get(url, timeout=5)
         data = resp.json().get("data") or {}
-        # 修正：f162 动态市盈率通常已经是常规数额，处理 '-' 的情况
-        def safe_div(val):
-            if isinstance(val, (int, float)): return val
-            try: return float(val) if val != '-' else '-'
-            except: return '-'
-
-        # 如果数值异常大 (例如 > 1000000 可能是由于返回了原始数值而非比率)
-        def clean_val(v, scale=1.0):
-            res = safe_div(v)
-            if isinstance(res, float) and res > 1000000: return round(res / 100000000.0, 2) # 处理市值当做指标的情况
-            return res
-
         return {
-            "pe": clean_val(data.get("f162")), # PE
-            "pb": clean_val(data.get("f167")), # PB
-            "turnover": clean_val(data.get("f168")), # 换手
-            "roe": clean_val(data.get("f117"), 0.01), # ROE 修正
+            "pe": data.get("f162", "-"),
+            "pb": data.get("f167", "-"),
+            "roe": data.get("f117", "-")
         }
     except:
-        return {"pe": "-", "pb": "-", "turnover": "-", "roe": "-"}
+        return {"pe": "-", "pb": "-", "roe": "-"}
 
 @lru_cache(maxsize=128)
 def fetch_sina_prices(codes: str) -> Dict[str, Any]:
-    """批量获取新浪实时行情数据 (codes 用逗号分隔，带 sh/sz/bj 前缀)"""
     url = f"https://hq.sinajs.cn/list={codes}"
     headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": "Mozilla/5.0"}
     results = {}
     try:
         resp = requests.get(url, headers=headers, timeout=5)
         text = resp.content.decode("gbk")
-        lines = text.split("\n")
-        for line in lines:
+        for line in text.split("\n"):
             if "=" not in line: continue
-            code_part, data_part = line.split("=")
-            code_full = code_part.split("_")[-1]  # sh600519
-            # 提取纯数字部分
-            code_num = "".join(filter(str.isdigit, code_full))
-            data = data_part.replace('"', '').split(",")
+            code_num = "".join(filter(str.isdigit, line.split("=")[0].split("_")[-1]))
+            data = line.split("=")[1].replace('"', '').split(",")
             if len(data) > 4:
                 price = float(data[3])
                 pre_close = float(data[2])
-                change = price - pre_close
-                pct_change = (change / pre_close * 100) if pre_close > 0 else 0
-                results[code_num] = {"price": price, "pct": round(pct_change, 2)}
-    except Exception as e:
-        logger.error(f"Sina Price Error: {e}")
+                pct = round((price - pre_close) / pre_close * 100, 2) if pre_close > 0 else 0
+                results[code_num] = {"price": price, "pct": pct}
+    except:
+        pass
     return results
+
+@lru_cache(maxsize=64)
+def fetch_price_history(code: str) -> List[Dict]:
+    """行情追踪器 v4.1：抓取近 30 个交易日的收盘价序列"""
+    symbol = f"{'sh' if code.startswith('6') else 'sz'}{code}"
+    url = f"http://money.finance.sina.com.cn/quotes_service/api/jsonp_v2.php/var%20_val=/CN_MarketData.getKLineData?symbol={symbol}&scale=240&ma=no&datalen=30"
+    try:
+        resp = requests.get(url, timeout=5)
+        text = resp.text
+        if "=" in text:
+            json_str = text.split("=", 1)[1].strip().rstrip(";")
+            import ast
+            data = ast.literal_eval(json_str)
+            return [{"date": it["day"], "price": float(it["close"])} for it in data]
+    except Exception as e:
+        logger.error(f"Price History Fetch Error: {e}")
+    return []
 
 @lru_cache(maxsize=128)
 def fetch_sina_live_news(code: str, name: str = "", industry: str = "") -> List[Dict]:
-    """极速情报 v2.2.8：全量 7x24 扫描 + 本地语义过滤算法"""
-    # lid=1023 (综合), lid=1582 (个股/行业)
-    # 拉取最近 50 条全量快讯进行本地匹配，防止代码搜索落空
     api_url = "https://feed.sina.com.cn/api/roll/get?num=50&page=1&field=title,url,time&z=1&ch=finance&lid=1023"
     try:
         resp = requests.get(api_url, timeout=5)
         raw_items = resp.json().get("result", {}).get("data", [])
-        
         news = []
         seen = set()
-        
-        # 关键词权重匹配逻辑
-        # 1. 优先匹配代码或简称
-        # 2. 如果不足，匹配行业关键词
         for it in raw_items:
             title = it.get("title", "").strip()
             if title in seen: continue
-            
-            # 语义命中判断
             is_hit = False
             tag = "实时"
             if code in title or (name and name[:2] in title):
-                is_hit = True
-                tag = "个股"
+                is_hit = True; tag = "个股"
             elif industry and industry[:2] in title:
-                is_hit = True
-                tag = "行业"
-            
+                is_hit = True; tag = "行业"
             if is_hit:
                 seen.add(title)
-                ts = int(it.get("time", 0))
                 news.append({
                     "title": title,
-                    "time": dt.datetime.fromtimestamp(ts).strftime("%H:%M"),
-                    "url": it.get("url"),
-                    "source": "新浪7x24",
-                    "tag": tag
+                    "time": dt.datetime.fromtimestamp(int(it["time"])).strftime("%H:%M"),
+                    "url": it["url"], "source": "新浪7x24", "tag": tag
                 })
-        
-        # 如果依然没数据，尝试一次关键词硬搜作为底线
-        if len(news) < 3:
-            search_url = f"https://feed.sina.com.cn/api/roll/get?num=10&page=1&keyword={name if name else code}&ch=finance"
-            s_resp = requests.get(search_url, timeout=5)
-            s_items = s_resp.json().get("result", {}).get("data", [])
-            for it in s_items:
-                title = it.get("title", "").strip()
-                if title not in seen:
-                    news.append({
-                        "title": title,
-                        "time": dt.datetime.fromtimestamp(int(it.get("time", 0))).strftime("%H:%M"),
-                        "url": it.get("url"),
-                        "source": "快讯",
-                        "tag": "历史"
-                    })
-        
         return news[:10]
-    except:
-        return []
+    except: return []
+
+@lru_cache(maxsize=128)
+def fetch_cls_news(code: str, name: str = "") -> List[Dict]:
+    url = "https://www.cls.cn/telegraph"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        match = re.search(r'window\.__NEXT_DATA__\s*=\s*(\{.*?\});', resp.text)
+        if not match: return []
+        json_data = json.loads(match.group(1))
+        # 简单提取逻辑 (v4.0 适配)
+        try:
+            items = json_data['props']['pageProps']['telegraphList']
+        except:
+            items = json_data['props']['initialState']['telegraph']['telegraphList']
+        news = []
+        kw = name if name else code
+        for it in items:
+            if kw in (it.get("title", "") + it.get("content", "")):
+                news.append({
+                    "title": it.get("title") or it.get("content")[:50],
+                    "time": dt.datetime.fromtimestamp(it["ctime"]).strftime("%H:%M"),
+                    "url": f"https://www.cls.cn/detail/{it['id']}",
+                    "source": "财联社电报", "tag": "实时"
+                })
+        return news
+    except: return []
 
 @lru_cache(maxsize=128)
 def fetch_xueqiu_hotness(code: str) -> Dict:
-    """热度直达：通过 Persistent Session 获取实时人气排名 (v2.2.7 高稳定版)"""
     symbol = f"SH{code}" if code.startswith("6") else f"SZ{code}"
     try:
-        # 使用全局持久化 Session
         url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol={symbol}&extend=detail"
         resp = XQ_SESSION.get(url, timeout=5)
-        
-        # 处理异常返回
-        if resp.status_code != 200:
-            init_xq_session() # 重新尝试激活 Session
-            resp = XQ_SESSION.get(url, timeout=5)
-
-        data = resp.json().get("data", {})
-        quote = data.get("quote", {})
-        followers = quote.get("followers", 0)
-        
-        # 实时榜单查询 (限定为最热门)
-        rank_url = "https://xueqiu.com/service/v1/stock/hot_stock/list?size=15&type=10"
-        rank_resp = XQ_SESSION.get(rank_url, timeout=5)
-        hot_items = rank_resp.json().get("data", {}).get("items", [])
-        
-        real_rank = "100+"
-        base_pop = min(98, 60 + (followers // 5000)) if followers > 0 else 65
-        
-        for i, item in enumerate(hot_items):
-            if item.get("symbol") == symbol:
-                real_rank = f"TOP {i+1}"
-                base_pop = 99 - i
-                break
-        
+        data = resp.json().get("data", {}).get("quote", {})
+        followers = data.get("followers", 0)
         return {
-            "popularity": base_pop,
+            "popularity": 75 if followers > 10000 else 60,
             "followers": followers,
-            "rank": real_rank if real_rank != "100+" else f"关注 {followers:,}",
-            "sentiment": "bullish" if base_pop > 75 else "neutral"
+            "rank": f"关注 {followers:,}",
+            "sentiment": "bullish" if followers > 50000 else "neutral"
         }
-    except Exception as e:
-        logger.error(f"Xueqiu Persistent Error: {e}")
-        return {"popularity": 68, "followers": 12800, "rank": "情报探测中", "sentiment": "neutral"}
+    except:
+        return {"popularity": 65, "followers": 0, "rank": "情报探测中", "sentiment": "neutral"}
 
-# --- 业务逻辑：核心聚合 ---
+# --- 核心路由 ---
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "source": "multi_source_intelligence_aggregator"}
+    return {"status": "ok", "source": "v4.1_stable"}
 
 @app.get("/api/stocks/search")
 def search_stock(q: str = Query(...)):
-    """基于东财最新 SearchAPI 的高性能搜索（支持拼音、首字母、汉字、代码）"""
     q = q.strip()
     if not q: return []
-    
-    # 使用标准 params 传递，自动处理 URL 编码
     url = "https://searchapi.eastmoney.com/api/suggest/get"
-    params = {
-        "input": q,
-        "type": "14",
-        "token": "D43A3003844103BA765F8397C224F2AD"
-    }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://data.eastmoney.com/",
-        "Accept": "application/json, text/plain, */*"
-    }
-    
+    params = {"input": q, "type": "14", "token": "D43A3003844103BA765F8397C224F2AD"}
     try:
-        # 云端环境增加超时容忍并添加模拟 Headers
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        data = resp.json()
-        
-        # 修正键名：最新的 API 结构是 QuotationCodeTable -> Data
-        table = data.get("QuotationCodeTable", {})
-        items = table.get("Data", [])
-        
-        if not items:
-            if re.fullmatch(r"\d{6}", q):
-                return [{"code": q, "name": f"直达代码 {q}", "industry": "直接穿透"}]
-            return []
-            
-        # 批量获取报价 (限定前 5 个以保证响应速度)
+        resp = requests.get(url, params=params, timeout=10)
+        items = resp.json().get("QuotationCodeTable", {}).get("Data", [])
+        if not items: return []
         results = []
-        top_items = items[:5]
-        sina_query = []
-        for it in top_items:
-            c = it.get("Code")
+        top_codes = []
+        for it in items[:5]:
+            c = it["Code"]
             prefix = "sh" if c.startswith("6") else "sz"
-            if c.startswith("4") or c.startswith("8"): prefix = "bj"
-            sina_query.append(f"{prefix}{c}")
-        
-        prices_map = fetch_sina_prices(",".join(sina_query))
-        
-        for item in items:
-            code = item.get("Code")
-            price_data = prices_map.get(code, {})
+            top_codes.append(f"{prefix}{c}")
+        prices = fetch_sina_prices(",".join(top_codes))
+        for it in items:
+            code = it["Code"]
+            p = prices.get(code, {"price": 0, "pct": 0})
             results.append({
-                "code": code,
-                "name": item.get("Name"),
-                "industry": item.get("SecurityTypeName"),
-                "price": price_data.get("price", 0.0),
-                "pct": price_data.get("pct", 0.0)
+                "code": code, "name": it["Name"], "industry": it["SecurityTypeName"],
+                "price": p["price"], "pct": p["pct"]
             })
         return results
-    except Exception as e:
-        logger.error(f"Search API error: {e}")
-        return []
+    except: return []
 
 @app.get("/api/stocks/{code}/highlights")
 def get_highlights(code: str):
-    # 使用线程池并发抓取三路数据 (公告 + 指标 + 雪球热度)
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_ann = executor.submit(fetch_announcements, code)
-        future_ind = executor.submit(fetch_eastmoney_indicators, code)
-        future_pop = executor.submit(fetch_xueqiu_hotness, code)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        f_ann = executor.submit(fetch_announcements, code)
+        f_ind = executor.submit(fetch_eastmoney_indicators, code)
+        f_pop = executor.submit(fetch_xueqiu_hotness, code)
+        f_price = executor.submit(fetch_price_history, code)
         
-        # 等待结果
-        raw_ann = future_ann.result()
-        indicators = future_ind.result()
-        xueqiu = future_pop.result()
-    
-    # 注入实时行情 (v2.2.9)
+        raw_ann = f_ann.result()
+        indicators = f_ind.result()
+        xueqiu = f_pop.result()
+        price_history = f_price.result()
+
     prefix = "sh" if code.startswith("6") else "sz"
-    if code.startswith("4") or code.startswith("8"): prefix = "bj"
     price_info = fetch_sina_prices(f"{prefix}{code}").get(code, {"price": 0.0, "pct": 0.0})
-
-    if not raw_ann:
-        raise HTTPException(status_code=404, detail="未检索到公告证据")
-
-    company_name = raw_ann[0].get("secName") or f"代码 {code}"
-    industry = raw_ann[0].get("type") or "通用板块"
+    name = raw_ann[0].get("secName") if raw_ann else f"代码 {code}"
+    ind = raw_ann[0].get("type") if raw_ann else "自选"
     
-    # 获取资讯 (v2.2.8 主动匹配开启)
-    live_news = fetch_sina_live_news(code, company_name, industry)
-    em_news = fetch_eastmoney_news(company_name, code)
+    cls_news = fetch_cls_news(code, name)
+    sina_news = fetch_sina_live_news(code, name, ind)
+    live_news = sorted((cls_news or []) + (sina_news or []), key=lambda x: x["time"], reverse=True)
     
     highlights = []
-    total_risk = 0
-    total_pos = 0
-
-    # 处理公告数据 (官方披露)
-    for item in raw_ann[:20]:
+    total_risk = 0; total_pos = 0
+    for item in raw_ann[:15]:
         title = item.get("announcementTitle", "")
-        ts = item.get("announcementTime")
-        published_at = dt.datetime.fromtimestamp(ts/1000).strftime("%Y-%m-%d") if ts else "未知"
-        pdf_url = get_pdf_url(item.get("adjunctUrl"))
-        ev = {"source": "巨潮资讯", "title": title, "time": published_at, "weight": "高", "excerpt": title, "url": pdf_url}
-        hist = [{"date": published_at, "action": "披露", "desc": "官方法定披露", "delta": "+1"}]
-
-    # 情报引擎 v3.0：结构化识别逻辑
-    for item in raw_ann[:20]:
-        title = item.get("announcementTitle", "")
-        ts = item.get("announcementTime")
-        published_at = dt.datetime.fromtimestamp(ts/1000).strftime("%Y-%m-%d") if ts else "未知"
-        pdf_url = get_pdf_url(item.get("adjunctUrl"))
-        
-        # 尝试匹配事件本体
-        matched_event = None
-        for key, event_meta in EVENT_CATALOG.items():
-            if any(kw in title for kw in event_meta["keywords"]):
-                matched_event = event_meta
-                break
-        
-        if matched_event:
-            side = "risk" if matched_event["severity"] > 75 else "positive"
-            
-            # 正则提取数值线索 (模拟 Layer 3 深度提取)
-            amount_match = re.search(r"(\d+\.?\d*[亿万]|人民币\d+)", title)
-            extracted_meta = amount_match.group(0) if amount_match else "详情"
-            
+        published_at = dt.datetime.fromtimestamp(item["announcementTime"]/1000).strftime("%Y-%m-%d")
+        matched = None
+        for k, meta in EVENT_CATALOG.items():
+            if any(kw in title for kw in meta["keywords"]):
+                matched = meta; break
+        if matched:
+            side = "risk" if matched["severity"] > 75 else "positive"
             highlights.append({
-                "id": f"event-{item['announcementId']}",
-                "side": side,
-                "label": matched_event["label"],
-                "stars": max(1, min(5, matched_event["severity"] // 20)),
-                "score": matched_event["severity"],
-                "category": matched_event["category"],
-                "why": title,
-                "interpretation": matched_event["interpretation"],
-                "game_view": matched_event["game_view"],
-                "factors": ["公告实证", extracted_meta],
-                "evidence": [{
-                    "source": "巨潮权威披露",
-                    "title": title,
-                    "time": published_at,
-                    "weight": "物理实证" if matched_event["severity"] > 80 else "常规信息",
-                    "excerpt": f"提取关键线索：{extracted_meta}。系统判定严重程度：{matched_event['severity']}%",
-                    "url": pdf_url
-                }],
-                "history": [{"date": published_at, "action": "事件识别", "desc": f"系统自动捕获并分类为：{matched_event['label']}", "delta": "NEW"}]
+                "id": f"ev-{item['announcementId']}", "side": side, "label": matched["label"],
+                "score": matched["severity"], "category": matched["category"], "why": title,
+                "interpretation": matched["interpretation"], "game_view": matched["game_view"],
+                "evidence": [{"source": "巨潮公告", "title": title, "time": published_at, "url": get_pdf_url(item["adjunctUrl"])}],
+                "history": [{"date": published_at, "action": "事件识别", "desc": matched["label"], "delta": "NEW"}]
             })
-            
             if side == "risk": total_risk += 1
             else: total_pos += 1
 
-    # 处理东财研报数据 (市场预期)
-    for item in em_news:
-        title = item.get("title", "")
-        published_at = item.get("time", "近期")
-        ev = {"source": "东财研报", "title": title, "time": published_at, "weight": "中", "excerpt": title, "url": item.get("url")}
-        hist = [{"date": published_at, "action": "研判", "desc": "市场机构分析视角", "delta": "+1"}]
-        
-        # 简化研报打分：提及“评级”或“买入”视为亮点
-        if any(kw in title for kw in ["买入", "增持", "评级", "目标价"]):
-            highlights.append({
-                "id": f"em-pos-{hash(title)}", "side": "positive", "label": "机构看好", "stars": 3, "score": 75,
-                "category": "研报观点", "why": title, "interpretation": "卖方机构给出正面评级，代表市场买方预期向上。",
-                "factors": ["分析师视角", "预期抬升"], "evidence": [ev], "history": hist
-            })
-            total_pos += 1
-        elif any(kw in title for kw in ["警示", "下调", "担忧"]):
-            highlights.append({
-                "id": f"em-neg-{hash(title)}", "side": "risk", "label": "机构警示", "stars": 3, "score": 80,
-                "category": "研究风险", "why": title, "interpretation": "机构分析师指出潜在隐忧，可能引发市场情绪波动。",
-                "factors": ["卖方预警", "流动性压制"], "evidence": [ev], "history": hist
-            })
-            total_risk += 1
-
-    # 绘制进化版 6 维度雷达图 (Hexagon Warrior)
-    pe_val = indicators.get("pe", 30)
-    pe_score = max(20, min(100, 100 - (float(pe_val) if isinstance(pe_val, (int, float)) else 30)))
-    
     radar = [
-        {"k": "价值增长", "v": min(100, total_pos * 25)},
-        {"k": "风险对冲", "v": max(0, 100 - total_risk * 20)},
-        {"k": "估值水平", "v": pe_score},
-        {"k": "信息透明", "v": min(100, len(raw_ann) * 5)},
-        {"k": "机构强度", "v": 80 if em_news else 40},
-        {"k": "市场人气", "v": xueqiu.get("popularity", 50)} # 新增第 6 维度
+        {"k": "价值增长", "v": min(100, total_pos * 30)},
+        {"k": "风险对冲", "v": max(0, 100 - total_risk * 25)},
+        {"k": "估值水平", "v": 70},
+        {"k": "市场人气", "v": xueqiu.get("popularity", 50)}
     ]
-
+    
     return {
-        "stock": {"code": code, "name": company_name, "industry": industry},
-        "summary": {
-            "riskCount": total_risk, "positiveCount": total_pos, "confidence": 92,
-            "totalRiskScore": min(100, total_risk * 15), "totalPositiveScore": min(100, total_pos * 12),
-            "sentiment": xueqiu.get("sentiment", "neutral"),
-            "lastUpdate": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        },
-        "marketImpression": f"市场综合情绪：{xueqiu.get('sentiment', '中性')}。全网关注排名第 {xueqiu.get('rank', 'N/A')}，当前行情反映了{ '偏正面' if price_info.get('pct', 0) > 0 else '偏负面' }的市场共识。包含 {total_risk} 项隐忧及 {total_pos} 项价值增长点。",
-        "price": price_info.get("price", 0.0),
-        "pctChange": price_info.get("pct", 0.0),
-        "headline": f"{company_name} ({code})",
-        "outlook": {
-            "consensus": xueqiu.get("sentiment", "neutral"), 
-            "shortTerm": f"PE({indicators.get('pe', '-')}) ROE({indicators.get('roe', '-')})", 
-            "valuation": f"最新价: {price_info.get('price', '-')}"
-        },
-        "highlights": highlights,
-        "liveNews": live_news,
-        "radar": radar,
-        "xueqiu": xueqiu
+        "stock": {"code": code, "name": name, "industry": ind},
+        "summary": {"riskCount": total_risk, "positiveCount": total_pos, "sentiment": xueqiu["sentiment"]},
+        "marketImpression": f"深度监测中。当前包含 {total_risk} 项风险与 {total_pos} 项亮点。",
+        "price": price_info["price"], "pctChange": price_info["pct"], "priceHistory": price_history,
+        "highlights": highlights, "liveNews": live_news[:10], "radar": radar, "xueqiu": xueqiu
     }
 
-@app.get("/api/stocks/{code}/history")
-def get_history(code: str):
-    try:
-        data = get_highlights(code)
-        history = []
-        for h in data["highlights"]:
-            for hist in h["history"]:
-                history.append({**hist, "label": h["label"], "side": h["side"], "highlightId": h["id"]})
-        return sorted(history, key=lambda x: x["date"], reverse=True)
-    except:
-        return []
-
 @app.get("/api/stocks/{code}/snapshots")
-def get_snapshots(code: str):
-    """
-    基于真实公告时间轴聚合趋势分值
-    """
-    raw_data = fetch_announcements(code)
-    if not raw_data: return []
+def list_snapshots(code: str):
+    file_path = f"data/snapshots_{code}.json"
+    if not os.path.exists(file_path): return []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f: return json.load(f)
+    except: return []
 
-    timeline = {}
-    for item in raw_data:
-        ts = item.get("announcementTime")
-        if not ts: continue
-        month_key = dt.datetime.fromtimestamp(ts/1000).strftime("%Y-%m")
-        title = item.get("announcementTitle", "")
-        
-        r_inc = 25 if any(any(kw in title for kw in kws) for _, kws in NEGATIVE_RULES) else 0
-        p_inc = 20 if any(any(kw in title for kw in kws) for _, kws in POSITIVE_RULES) else 0
-        
-        if month_key not in timeline: timeline[month_key] = {"risk": 0, "positive": 0}
-        timeline[month_key]["risk"] = min(100, timeline[month_key]["risk"] + r_inc)
-        timeline[month_key]["positive"] = min(100, timeline[month_key]["positive"] + p_inc)
-
-    sorted_months = sorted(timeline.keys())
-    return [
-        {"snapshotDate": f"{m}-01", "riskScore": timeline[m]["risk"], "positiveScore": timeline[m]["positive"]}
-        for m in sorted_months
-    ]
+@app.post("/api/stocks/{code}/snapshots")
+def save_snapshot(code: str, snapshot_data: Dict):
+    file_path = f"data/snapshots_{code}.json"
+    snapshots = list_snapshots(code)
+    snapshot_data["timestamp"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    snapshot_data["id"] = f"snap-{int(dt.datetime.now().timestamp())}"
+    snapshots.insert(0, snapshot_data)
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(snapshots[:10], f, ensure_ascii=False, indent=2)
+    return {"status": "success", "id": snapshot_data["id"]}
 
 if __name__ == "__main__":
     import uvicorn
-    import os
-    # 适配 Google Cloud Run 的端口要求
-    port = int(os.getenv("PORT", 8001))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8001)))
