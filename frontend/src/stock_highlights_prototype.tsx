@@ -47,8 +47,8 @@ const API_BASE_URL = (import.meta as any)?.env?.VITE_API_BASE_URL ||
   (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:8001'
     : (window.location.hostname.includes('github.io') 
-        ? 'https://jichuang123-stock-backend.hf.space' // 强制指向 HF 后端
-        : window.location.origin)); // HF 全栈环境使用同源
+        ? 'https://jichuang-me-stock-highlights.hf.space' // 修正为 jichuang-me 的后端
+        : window.location.origin)); 
 
 type SearchStock = {
   code: string;
@@ -822,8 +822,8 @@ export default function StockHighlightsPrototype() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">个股智策 <span className="mx-1 text-slate-300 font-light">|</span> <span className="text-slate-500 font-medium">穿透式投研终端</span></h1>
-                <Badge variant="outline" className="rounded-full border-red-200 bg-red-50 text-[10px] py-0 px-2 font-bold text-red-700 uppercase tracking-wider animate-pulse">
-                  Terminal v2.2.0 LIVE-INTELLIGENCE
+                <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-[10px] py-0 px-2 font-bold text-blue-700 uppercase tracking-wider animate-pulse">
+                  Terminal v4.1.5 RECOVERY-FIX
                 </Badge>
               </div>
               <p className="mt-0.5 text-xs font-medium text-slate-400">
@@ -1013,7 +1013,7 @@ export default function StockHighlightsPrototype() {
                       </div>
                     </div>
                     <Badge variant="outline" className="border-slate-700 text-slate-400 font-mono tracking-widest text-[9px] uppercase">
-                      INTELLIGENCE_LAYER_v2.2.9_FINAL
+                      INTELLIGENCE_LAYER_v4.1.5_STABLE
                     </Badge>
                   </div>
                   <div className="space-y-4">
