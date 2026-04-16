@@ -9,6 +9,9 @@ from functools import lru_cache
 
 import sys
 import logging
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 
 # 配置日志输出到 stdout 以便在云端查看
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -20,13 +23,31 @@ app = FastAPI(title="Stock Highlights Real Data Backend")
 async def startup_event():
     logger.info("Backend service starting up on cloud environment...")
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Stock Highlights API is Running",
-        "endpoints": ["/api/highlights", "/api/search", "/api/health"],
-        "status": "active"
-    }
+# 托管前端静态文件 (由 Docker 构建阶段产出到 dist 目录)
+# 只有当 dist 目录存在时才挂载，防止本地开发环境报错
+dist_path = os.path.join(os.path.dirname(__file__), "dist")
+if os.path.exists(dist_path):
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # 排除 API 请求
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        
+        # 尝试返回具体文件，否则返回 index.html (支持 React Router)
+        file_path = os.path.join(dist_path, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(dist_path, "index.html"))
+else:
+    @app.get("/")
+    async def root():
+        return {
+            "message": "Stock Highlights API is Running (Static UI not built)",
+            "endpoints": ["/api/highlights", "/api/search", "/api/health"],
+            "status": "active"
+        }
 
 # 允许跨域
 app.add_middleware(
