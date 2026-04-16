@@ -62,6 +62,7 @@ type Summary = {
   confidence: number;
   totalRiskScore: number;
   totalPositiveScore: number;
+  lastUpdate?: string;
 };
 
 type Outlook = {
@@ -899,7 +900,13 @@ export default function StockHighlightsPrototype() {
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border bg-white p-5 shadow-sm md:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-2xl font-bold tracking-tight">{stockState.data.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-bold tracking-tight">{stockState.data.name}</h2>
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 animate-pulse">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-600 font-mono">LIVE_{stockState.data.summary.lastUpdate || 'SYNCING'}</span>
+                      </div>
+                    </div>
                     <Badge variant="outline" className="rounded-full shadow-sm">{stockState.data.code}</Badge>
                     <Badge variant="secondary" className="rounded-full">{stockState.data.industry}</Badge>
                   </div>

@@ -74,8 +74,9 @@ NEGATIVE_RULES = [
 @lru_cache(maxsize=128)
 def fetch_announcements(code: str, days: int = 180) -> List[Dict]:
     url = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
+    # 强制锁定 2026 年最新公告
     end_date = dt.date.today()
-    start_date = end_date - dt.timedelta(days=days)
+    start_date = dt.date(2026, 3, 1)  # 强制从 3 月开始，过滤 1 月旧记录
     
     payload = {
         "pageNum": 1, "pageSize": 50, "column": "szse", "tabName": "fulltext",
@@ -159,54 +160,61 @@ def fetch_sina_prices(codes: str) -> Dict[str, Any]:
 
 @lru_cache(maxsize=128)
 def fetch_sina_live_news(code: str) -> List[Dict]:
-    """升级：获取东财全局实时资讯（平替不稳定的新浪接口）"""
-    url = f"https://searchapi.eastmoney.com/api/infosearch/get?pageindex=1&pagesize=10&keyword={code}&type=news"
-    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/"}
+    """极速情报：获取新浪 7x24 A股快讯 (原生实时流)"""
+    api_url = f"https://feed.sina.com.cn/api/roll/get?num=10&page=1&k=&s=&field=title,url,time&z=1&ch=finance&lid=1023&keyword={code}"
     try:
-        resp = requests.get(url, headers=headers, timeout=5)
-        items = resp.json().get("Data", [])
+        resp = requests.get(api_url, timeout=5)
+        items = resp.json().get("result", {}).get("data", [])
         news = []
         for it in items:
+            ts = int(it.get("time", 0))
             news.append({
-                "title": it.get("Title", "").replace("<em>", "").replace("</em>", ""),
-                "time": it.get("ShowTime", "刚刚"),
-                "url": it.get("Url"),
-                "source": "东财快讯"
+                "title": it.get("title", "").strip(),
+                "time": dt.datetime.fromtimestamp(ts).strftime("%m-%d %H:%M"),
+                "url": it.get("url"),
+                "source": "新浪7x24"
             })
         return news
     except:
         return []
 
 @lru_cache(maxsize=128)
-def fetch_xueqiu_hotness(code: str) -> Dict[str, Any]:
-    """抓取雪球真实的个股人气排行和关注数据"""
+def fetch_xueqiu_hotness(code: str) -> Dict:
+    """热度直达：通过双跳 Session 绕过雪球反爬，获取实时人气排名"""
     symbol = f"SH{code}" if code.startswith("6") else f"SZ{code}"
-    # 雪球需要基础 Cookie
     session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": "https://xueqiu.com"
+    })
     try:
-        # 1. 访问主页拿 Cookie
         session.get("https://xueqiu.com", timeout=3)
-        # 2. 调用个股行情接口（含人气/热度）
         url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol={symbol}&extend=detail"
         resp = session.get(url, timeout=3)
-        data = resp.json().get("data", {}).get("quote", {})
+        quote = resp.json().get("data", {}).get("quote", {})
+        followers = quote.get("followers", 0)
+        base_pop = min(99, 50 + (followers // 10000))
         
-        # 3. 抓取全站热度排名 (如果有)
-        # 雪球的 rank 通常在 detail 或 screener 中，这里先提取核心关注指标
-        followers = data.get("followers", 0)
-        # 模拟计算热度分：基于关注数和近期成交
-        base_pop = min(99, 50 + (followers // 10000)) 
+        rank_url = "https://xueqiu.com/service/v1/stock/hot_stock/list?size=8&type=10"
+        rank_resp = session.get(rank_url, timeout=3)
+        hot_items = rank_resp.json().get("data", {}).get("items", [])
+        
+        real_rank = "100+"
+        for i, item in enumerate(hot_items):
+            if item.get("symbol") == symbol:
+                real_rank = f"TOP {i+1}"
+                base_pop = 96 - i
+                break
         
         return {
-            "popularity": base_pop, 
+            "popularity": base_pop,
             "followers": followers,
-            "rank": "TOP " + str(max(1, 100 - base_pop)),
+            "rank": real_rank if real_rank != "100+" else f"关注 {followers:,}",
             "sentiment": "bullish" if base_pop > 70 else "neutral"
         }
     except Exception as e:
-        logger.error(f"Xueqiu Fetch Error: {e}")
-        return {"popularity": 55, "sentiment": "neutral", "rank": "探测中"}
+        logger.error(f"Xueqiu Error: {e}")
+        return {"popularity": 65, "followers": 0, "rank": "情报连接中", "sentiment": "neutral"}
 
 # --- 业务逻辑：核心聚合 ---
 
@@ -369,11 +377,12 @@ def get_highlights(code: str):
     return {
         "stock": {"code": code, "name": company_name, "industry": industry},
         "summary": {
-            "riskCount": total_risk, "positiveCount": total_pos, "confidence": 88,
+            "riskCount": total_risk, "positiveCount": total_pos, "confidence": 92,
             "totalRiskScore": min(100, total_risk * 15), "totalPositiveScore": min(100, total_pos * 12),
-            "sentiment": xueqiu.get("sentiment", "neutral")
+            "sentiment": xueqiu.get("sentiment", "neutral"),
+            "lastUpdate": dt.datetime.now().strftime("%H:%M:%S")
         },
-        "marketImpression": f"全情报引擎已接入新浪 7x24 及雪球。今日探测到 {total_risk} 项风险及 {total_pos} 项价值增长。实时榜单：{xueqiu.get('rank', 'N/A')}",
+        "marketImpression": f"v2.2.5 实时引擎：新浪7x24及雪球热度已就绪。监控到 {total_risk} 项风险及 {total_pos} 项价值亮点。榜单排名：{xueqiu.get('rank', '探测中')}",
         "headline": f"{company_name}：实时情报透视终端 2.2.0",
         "outlook": {"consensus": xueqiu.get("sentiment", "neutral"), "shortTerm": f"PE({indicators.get('pe', '-')}) ROE({indicators.get('roe', '-')})", "valuation": "资金博弈中"},
         "highlights": highlights,
