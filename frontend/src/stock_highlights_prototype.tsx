@@ -49,6 +49,8 @@ type SearchStock = {
   code: string;
   name: string;
   industry?: string;
+  price?: number;
+  pct?: number;
 };
 
 type Summary = {
@@ -112,6 +114,13 @@ type StockResponse = {
   outlook: Outlook;
   highlights: HighlightItem[];
   radar?: Array<{ k: string; v: number }>;
+  xueqiu?: {
+    popularity: number;
+    sentiment: string;
+    opinion: string;
+    analysis: string;
+    timestamp: string;
+  };
 };
 
 type SnapshotPoint = {
@@ -121,17 +130,14 @@ type SnapshotPoint = {
   headline?: string;
 };
 
-type StockViewModel = {
-  code: string;
-  name: string;
-  industry: string;
-  marketImpression: string;
-  headline: string;
-  summary: Summary;
-  outlook: Outlook;
-  highlights: HighlightItem[];
   radar: Array<{ k: string; v: number }>;
   trend: Array<{ date: string; risk: number; positive: number }>;
+  xueqiu?: {
+    popularity: number;
+    sentiment: string;
+    opinion: string;
+    analysis: string;
+  };
 };
 
 async function apiRequest<T>(path: string): Promise<T> {
@@ -588,6 +594,7 @@ export default function StockHighlightsPrototype() {
               risk: p.riskScore,
               positive: p.positiveScore,
             })),
+            xueqiu: highlightsRes.xueqiu
           }
         });
       } catch (err: any) {
@@ -751,25 +758,35 @@ export default function StockHighlightsPrototype() {
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 智能情报检索中...
                   </div>
                 ) : (quickSearchInput ? searchResults : recentStocks).length > 0 ? (
-                  (quickSearchInput ? searchResults : recentStocks).map((item, idx) => (
-                    <div
-                      key={item.code}
-                      onClick={() => selectStock(item)}
-                      className={`flex cursor-pointer items-center justify-between rounded-2xl p-4 transition ${idx === selectedIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
-                      onMouseEnter={() => setSelectedIndex(idx)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-xl bg-slate-900 px-2.5 py-1 text-xs font-mono font-bold text-white tracking-widest leading-none shadow-sm">{item.code}</div>
-                        <div>
-                          <div className="text-lg font-bold text-slate-900 leading-tight">{item.name}</div>
-                          <div className="mt-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{item.industry || 'MARKET_STOCK'}</div>
+                      (quickSearchInput ? searchResults : recentStocks).map((item, idx) => (
+                      <div
+                        key={item.code}
+                        onClick={() => selectStock(item)}
+                        className={`flex cursor-pointer items-center justify-between rounded-2xl p-4 transition ${idx === selectedIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-xl bg-slate-900 px-2.5 py-1 text-xs font-mono font-bold text-white tracking-widest leading-none shadow-sm">{item.code}</div>
+                          <div>
+                            <div className="text-lg font-bold text-slate-900 leading-tight">{item.name}</div>
+                            <div className="mt-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{item.industry || 'MARKET_STOCK'}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {item.price !== undefined && (
+                            <div className="text-right">
+                              <div className="text-lg font-mono font-bold text-slate-900">
+                                {item.price.toFixed(2)}
+                              </div>
+                              <div className={`text-[10px] font-bold font-mono ${(item.pct || 0) >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                {(item.pct || 0) >= 0 ? '+' : ''}{((item.pct || 0) * 100).toFixed(2)}%
+                              </div>
+                            </div>
+                          )}
+                          <ChevronRight className={`h-5 w-5 transition ${idx === selectedIndex ? 'text-slate-900 translate-x-1' : 'text-slate-300'}`} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <ChevronRight className={`h-5 w-5 transition ${idx === selectedIndex ? 'text-slate-900 translate-x-1' : 'text-slate-300'}`} />
-                      </div>
-                    </div>
-                  ))
+                    ))
                 ) : (
                   <div className="p-16 text-center">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-50">
@@ -857,15 +874,32 @@ export default function StockHighlightsPrototype() {
               </div>
 
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border bg-white p-5 shadow-sm md:p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-2xl font-bold tracking-tight">{stockState.data.name}</h2>
-                  <Badge variant="outline" className="rounded-full shadow-sm">{stockState.data.code}</Badge>
-                  <Badge variant="secondary" className="rounded-full">{stockState.data.industry}</Badge>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-2xl font-bold tracking-tight">{stockState.data.name}</h2>
+                    <Badge variant="outline" className="rounded-full shadow-sm">{stockState.data.code}</Badge>
+                    <Badge variant="secondary" className="rounded-full">{stockState.data.industry}</Badge>
+                  </div>
+                  {stockState.data.xueqiu && (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={`rounded-full border-none px-3 py-1 font-bold ${stockState.data.xueqiu.sentiment === 'bullish' ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                        {stockState.data.xueqiu.sentiment === 'bullish' ? '🔥 看多情绪高涨' : '🧊 情绪回归冷静'}
+                      </Badge>
+                      <Badge variant="outline" className="rounded-full bg-slate-900 font-mono text-[10px] text-white">
+                        POP_RANK: {stockState.data.xueqiu.popularity}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 font-medium">{stockState.data.marketImpression}</p>
                 <div className="mt-5 rounded-2xl bg-slate-900 p-4 text-white md:p-5 shadow-inner">
-                  <div className="flex items-center gap-2 text-sm text-slate-400 font-mono"><Sparkles className="h-4 w-4" /> AUTO_INSIGHT</div>
+                  <div className="flex items-center gap-2 text-sm text-slate-400 font-mono"><Sparkles className="h-4 w-4" /> CROSS_SOURCE_INSIGHT</div>
                   <div className="mt-2 text-lg font-bold leading-tight">{stockState.data.headline}</div>
+                  {stockState.data.xueqiu?.analysis && (
+                    <div className="mt-3 border-t border-slate-800 pt-3 text-xs leading-5 text-slate-400">
+                      分析官点评：{stockState.data.xueqiu.analysis}
+                    </div>
+                  )}
                 </div>
               </motion.div>
 
