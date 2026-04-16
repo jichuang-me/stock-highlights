@@ -1,40 +1,21 @@
-# Node.js
-node_modules/
-dist/
-dist-ssr/
-*.local
-.npm
-.eslintcache
-
-# Python
+# Python 编译缓存
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+hf_deploy/**/__pycache__/
+hf_deploy/**/*.py[cod]
 
-# Secrets
+# 环境与变量
 .env
-*.secrets
-*.key
+.venv
+env/
+venv/
+ENV/
 
-# IDE / OS
-.vscode/
-.idea/
+# 系统文件
 .DS_Store
 Thumbs.db
-desktop.ini
+
+# 前端产物 (已移至 GitHub Pages 维护)
+frontend/dist/
+node_modules/
