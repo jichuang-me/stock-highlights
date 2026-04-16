@@ -100,6 +100,7 @@ type HighlightItem = {
   category: string;
   why: string;
   interpretation: string;
+  game_view?: string;
   factors: string[];
   evidence: EvidenceItem[];
   history: HistoryItem[];
@@ -358,7 +359,14 @@ function HighlightCard({ item, onOpen }: { item: HighlightItem; onOpen: (item: H
               <Icon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <div className="text-xl font-semibold tracking-tight">{item.label}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xl font-semibold tracking-tight">{item.label}</div>
+                {item.game_view && (
+                  <Badge variant="outline" className="rounded-full bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
+                    <Zap size={10} className="mr-1 inline-block" /> 深度博弈
+                  </Badge>
+                )}
+              </div>
               <p className="mt-2 text-sm leading-6 text-slate-600">{item.why}</p>
             </div>
           </div>
@@ -397,24 +405,24 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
             </DialogHeader>
 
             <div className="space-y-6">
-              <div className="rounded-2xl bg-blue-50 p-4">
-                <div className="text-sm font-semibold text-blue-800">投资视角结论</div>
-                <div className="mt-2 space-y-2 text-sm text-blue-900">
-                  <div>• 短期判断：{item.side === 'risk' ? '该风险仍处于作用期，需谨慎应对。' : '该亮点仍在验证阶段，适合跟踪观察。'}</div>
-                  <div>• 中期影响：{item.side === 'risk' ? '若未缓解，可能持续压制估值与预期。' : '若兑现，将对估值形成支撑。'}</div>
-                  <div>• 关键观察点：</div>
-                  <ul className="ml-4 list-disc">
-                    {(item.factors || []).slice(0, 3).map((f, i) => (
-                      <li key={`${f}-${i}`}>{f}</li>
-                    ))}
-                  </ul>
+              <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 p-5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5"><Zap size={40} /></div>
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-800 uppercase tracking-widest mb-3">
+                  <Sparkles size={16} /> Game Insight / 博弈逻辑研判
+                </div>
+                <p className="text-sm font-medium leading-relaxed text-amber-900 italic">
+                  “ {item.game_view || '该事件触发常规逻辑判定，暂无深度博弈偏离信息。'} ”
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none rounded-full text-[10px]">逻辑反转点</Badge>
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none rounded-full text-[10px]">资金博弈</Badge>
                 </div>
               </div>
 
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="text-sm font-semibold">核心判断</div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{item.why}</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{item.interpretation}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600 font-medium">基本面解读：{item.interpretation}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(item.factors || []).map((factor) => (
                     <Badge key={factor} variant="secondary" className="rounded-full">
