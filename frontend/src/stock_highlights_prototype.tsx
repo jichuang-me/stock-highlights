@@ -43,7 +43,9 @@ import {
 const API_BASE_URL = (import.meta as any)?.env?.VITE_API_BASE_URL || 
   (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:8001'
-    : window.location.origin); // 动态识别：如果是 HF 全栈部署，则请求同源 API
+    : (window.location.hostname.includes('github.io') 
+        ? 'https://jichuang123-stock-backend.hf.space' // 强制指向 HF 后端
+        : window.location.origin)); // HF 全栈环境使用同源
 
 type SearchStock = {
   code: string;
@@ -700,7 +702,7 @@ export default function StockHighlightsPrototype() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">个股智策 <span className="mx-1 text-slate-300 font-light">|</span> <span className="text-slate-500 font-medium">穿透式投研终端</span></h1>
                 <Badge variant="outline" className="rounded-full border-red-200 bg-red-50 text-[10px] py-0 px-2 font-bold text-red-700 uppercase tracking-wider animate-pulse">
-                  Terminal v2.1.0 AI-FORCE
+                  Terminal v2.1.1 NETWORK-FIX
                 </Badge>
               </div>
               <p className="mt-0.5 text-xs font-medium text-slate-400">
