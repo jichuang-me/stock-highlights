@@ -908,6 +908,7 @@ export default function StockHighlightsPrototype() {
                       </div>
                     </div>
                     <Badge variant="outline" className="rounded-full shadow-sm">{stockState.data.code}</Badge>
+                    <Badge variant="outline" className="rounded-full bg-slate-50 text-[10px] text-slate-400 border-slate-100 font-mono">v2.2.6_STABLE</Badge>
                     <Badge variant="secondary" className="rounded-full">{stockState.data.industry}</Badge>
                   </div>
                   {stockState.data.xueqiu && (
