@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制后端代码
 COPY . .
 
-# Cloud Run 通常根据 $PORT 环境变量设置端口，默认为 8080
-ENV PORT=8080
+# Hugging Face Spaces 默认监听 7860 端口
+ENV PORT=7860
 
 # 启动命令
 CMD ["python", "app.py"]
