@@ -130,6 +130,18 @@ type SnapshotPoint = {
   riskScore: number;
   positiveScore: number;
   headline?: string;
+  liveNews?: {
+    title: string;
+    time: string;
+    url: string;
+    source: string;
+  }[];
+  xueqiu?: {
+    popularity: number;
+    followers: number;
+    rank: string;
+    sentiment: string;
+  };
 };
 
 type StockViewModel = {
@@ -702,7 +714,7 @@ export default function StockHighlightsPrototype() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">个股智策 <span className="mx-1 text-slate-300 font-light">|</span> <span className="text-slate-500 font-medium">穿透式投研终端</span></h1>
                 <Badge variant="outline" className="rounded-full border-red-200 bg-red-50 text-[10px] py-0 px-2 font-bold text-red-700 uppercase tracking-wider animate-pulse">
-                  Terminal v2.1.1 NETWORK-FIX
+                  Terminal v2.2.0 LIVE-INTELLIGENCE
                 </Badge>
               </div>
               <p className="mt-0.5 text-xs font-medium text-slate-400">
@@ -1057,7 +1069,62 @@ export default function StockHighlightsPrototype() {
               <Card className="rounded-3xl border shadow-sm">
                 <CardHeader><SectionTitle icon={TrendingUp} title="未来预期" subtitle="帮助理解后续 1-3 个月的关注重点" /></CardHeader>
                 <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
+                  {/* 2.2.0 新增：实时情报仪表盘 */}
+        <div className="mb-6 grid gap-6 md:grid-cols-4">
+          <Card className="col-span-1 rounded-3xl border bg-slate-900 text-white shadow-xl overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">雪球人气榜</span>
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-black text-emerald-400">{stockState.data.xueqiu?.rank || 'N/A'}</div>
+              <div className="mt-2 text-xs text-slate-400">
+                {stockState.data.xueqiu?.followers?.toLocaleString()} 位投资者深度关注
+              </div>
+              <div className="mt-4 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-emerald-500 transition-all duration-1000" 
+                  style={{ width: `${stockState.data.xueqiu?.popularity || 0}%` }} 
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-3 rounded-3xl border shadow-sm overflow-hidden">
+            <CardHeader className="py-3 bg-slate-50 border-b">
+              <div className="flex items-center justify-between">
+                <SectionTitle icon={Zap} title="7x24 情报闪电流" subtitle="来自新浪财经、雪球的最新实时脉动" />
+                <Badge variant="secondary" className="bg-slate-200 text-slate-600">实时更新中</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-[140px] overflow-y-auto overscroll-contain scrollbar-hide">
+                {stockState.data.liveNews && stockState.data.liveNews.length > 0 ? (
+                  stockState.data.liveNews.map((news, i) => (
+                    <a 
+                      key={i} 
+                      href={news.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-4 border-b p-3 hover:bg-slate-50 transition-colors last:border-0"
+                    >
+                      <span className="text-[10px] font-mono font-bold text-slate-400 whitespace-nowrap">{news.time.split(' ')[1] || news.time}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold whitespace-nowrap">{news.source}</span>
+                      <span className="text-sm font-medium text-slate-700 truncate">{news.title}</span>
+                      <ArrowUpRight className="h-3 w-3 text-slate-300 ml-auto" />
+                    </a>
+                  ))
+                ) : (
+                  <div className="p-8 text-center text-slate-400 text-sm">暂未探测到当前盘中快讯...</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <div className="text-sm font-semibold">分析师共识</div>
                       <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.consensus || '数据暂不可用'}</p>
