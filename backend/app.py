@@ -172,35 +172,62 @@ def fetch_sina_prices(codes: str) -> Dict[str, Any]:
     return results
 
 @lru_cache(maxsize=128)
-def fetch_sina_live_news(code: str, name: str = "") -> List[Dict]:
-    """极速情报：获取新浪 7x24 A股快讯 (双模搜索提升命中率)"""
-    # 优先搜索公司简称，因为快讯通常不带代码
-    query = name if name else code
-    api_url = f"https://feed.sina.com.cn/api/roll/get?num=15&page=1&k=&s=&field=title,url,time&z=1&ch=finance&lid=1023&keyword={query}"
+def fetch_sina_live_news(code: str, name: str = "", industry: str = "") -> List[Dict]:
+    """极速情报 v2.2.8：全量 7x24 扫描 + 本地语义过滤算法"""
+    # lid=1023 (综合), lid=1582 (个股/行业)
+    # 拉取最近 50 条全量快讯进行本地匹配，防止代码搜索落空
+    api_url = "https://feed.sina.com.cn/api/roll/get?num=50&page=1&field=title,url,time&z=1&ch=finance&lid=1023"
     try:
         resp = requests.get(api_url, timeout=5)
-        items = resp.json().get("result", {}).get("data", [])
+        raw_items = resp.json().get("result", {}).get("data", [])
         
-        # 如果公司简称检索结果不足 3 条，尝试用代码补位
-        if len(items) < 3 and name:
-            fallback_url = f"https://feed.sina.com.cn/api/roll/get?num=10&page=1&k=&s=&field=title,url,time&z=1&ch=finance&lid=1023&keyword={code}"
-            f_resp = requests.get(fallback_url, timeout=5)
-            f_items = f_resp.json().get("result", {}).get("data", [])
-            items.extend(f_items)
-
         news = []
         seen = set()
-        for it in items:
+        
+        # 关键词权重匹配逻辑
+        # 1. 优先匹配代码或简称
+        # 2. 如果不足，匹配行业关键词
+        for it in raw_items:
             title = it.get("title", "").strip()
             if title in seen: continue
-            seen.add(title)
-            ts = int(it.get("time", 0))
-            news.append({
-                "title": title,
-                "time": dt.datetime.fromtimestamp(ts).strftime("%m-%d %H:%M"),
-                "url": it.get("url"),
-                "source": "新浪7x24"
-            })
+            
+            # 语义命中判断
+            is_hit = False
+            tag = "实时"
+            if code in title or (name and name[:2] in title):
+                is_hit = True
+                tag = "个股"
+            elif industry and industry[:2] in title:
+                is_hit = True
+                tag = "行业"
+            
+            if is_hit:
+                seen.add(title)
+                ts = int(it.get("time", 0))
+                news.append({
+                    "title": title,
+                    "time": dt.datetime.fromtimestamp(ts).strftime("%H:%M"),
+                    "url": it.get("url"),
+                    "source": "新浪7x24",
+                    "tag": tag
+                })
+        
+        # 如果依然没数据，尝试一次关键词硬搜作为底线
+        if len(news) < 3:
+            search_url = f"https://feed.sina.com.cn/api/roll/get?num=10&page=1&keyword={name if name else code}&ch=finance"
+            s_resp = requests.get(search_url, timeout=5)
+            s_items = s_resp.json().get("result", {}).get("data", [])
+            for it in s_items:
+                title = it.get("title", "").strip()
+                if title not in seen:
+                    news.append({
+                        "title": title,
+                        "time": dt.datetime.fromtimestamp(int(it.get("time", 0))).strftime("%H:%M"),
+                        "url": it.get("url"),
+                        "source": "快讯",
+                        "tag": "历史"
+                    })
+        
         return news[:10]
     except:
         return []
@@ -332,8 +359,8 @@ def get_highlights(code: str):
     company_name = raw_ann[0].get("secName") or f"代码 {code}"
     industry = raw_ann[0].get("type") or "通用板块"
     
-    # 获取资讯 (注入公司简称以增强搜索)
-    live_news = fetch_sina_live_news(code, company_name)
+    # 获取资讯 (v2.2.8 主动匹配开启)
+    live_news = fetch_sina_live_news(code, company_name, industry)
     em_news = fetch_eastmoney_news(company_name, code)
     
     highlights = []

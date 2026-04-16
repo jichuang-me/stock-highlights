@@ -1103,8 +1103,11 @@ export default function StockHighlightsPrototype() {
           <Card className="col-span-3 rounded-3xl border shadow-sm overflow-hidden">
             <CardHeader className="py-3 bg-slate-50 border-b">
               <div className="flex items-center justify-between">
-                <SectionTitle icon={Zap} title="7x24 情报闪电流" subtitle="来自新浪财经、雪球的最新实时脉动" />
-                <Badge variant="secondary" className="bg-slate-200 text-slate-600">实时更新中</Badge>
+                <SectionTitle icon={Zap} title="7x24 情报闪电流" subtitle="基于全量快讯流的实时语义过滤" />
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">实时情报扫描中</span>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -1118,14 +1121,26 @@ export default function StockHighlightsPrototype() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-4 border-b p-3 hover:bg-slate-50 transition-colors last:border-0"
                     >
-                      <span className="text-[10px] font-mono font-bold text-slate-400 whitespace-nowrap">{news.time.split(' ')[1] || news.time}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold whitespace-nowrap">{news.source}</span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 whitespace-nowrap">{news.time}</span>
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold">{news.source}</span>
+                        {news.tag && (
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-black border ${
+                            news.tag === '个股' ? 'border-orange-200 bg-orange-50 text-orange-600' : 'border-slate-200 bg-slate-50 text-slate-600'
+                          }`}>
+                            {news.tag}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-sm font-medium text-slate-700 truncate">{news.title}</span>
                       <ArrowUpRight className="h-3 w-3 text-slate-300 ml-auto" />
                     </a>
                   ))
                 ) : (
-                  <div className="p-8 text-center text-slate-400 text-sm">暂未探测到当前盘中快讯...</div>
+                  <div className="p-8 text-center text-slate-400">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
+                    <p className="text-xs italic">正在尝试匹配个股及相关行业情报...</p>
+                  </div>
                 )}
               </div>
             </CardContent>
