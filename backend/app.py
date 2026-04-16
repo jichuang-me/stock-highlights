@@ -272,5 +272,7 @@ def get_snapshots(code: str):
 
 if __name__ == "__main__":
     import uvicorn
-    # 迁移至 8001 端口以避开系统 8000 端口冲突
-    uvicorn.run("app:app", host="0.0.0.0", port=8001, reload=True)
+    import os
+    # 适配 Google Cloud Run 的端口要求
+    port = int(os.getenv("PORT", 8001))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
