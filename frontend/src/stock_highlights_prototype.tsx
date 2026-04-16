@@ -1,3 +1,4 @@
+﻿/// <reference types="vite/client" />
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -210,74 +211,74 @@ const sideStyle = {
     badge: 'bg-red-50 text-red-700 border-red-200',
     chip: 'bg-red-50 text-red-700',
     icon: AlertTriangle,
-    label: '风险',
+    label: '椋庨櫓',
   },
   positive: {
     badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     chip: 'bg-emerald-50 text-emerald-700',
     icon: Sparkles,
-    label: '亮点',
+    label: '浜偣',
   },
 } as const;
 
 function scoreToStars(n: number) {
-  return '★'.repeat(Math.max(0, n)) + '☆'.repeat(Math.max(0, 5 - n));
+  return '鈽?.repeat(Math.max(0, n)) + '鈽?.repeat(Math.max(0, 5 - n));
 }
 
 function cnDelta(text?: string) {
-  if (!text) return '暂无';
-  return text.startsWith('+') ? `上升 ${text}` : text;
+  if (!text) return '鏆傛棤';
+  return text.startsWith('+') ? `涓婂崌 ${text}` : text;
 }
 
 function getLatestHistoryBadge(item?: { history?: HistoryItem[] }) {
   const latest = item?.history?.[item.history.length - 1]?.action || item?.history?.[0]?.action || '';
   const map: Record<string, { label: string; className: string }> = {
-    新增: { label: '新增', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-    升级: { label: '升级', className: 'bg-red-50 text-red-700 border-red-200' },
-    强化: { label: '强化', className: 'bg-orange-50 text-orange-700 border-orange-200' },
-    维持高位: { label: '高位', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-    缓和: { label: '缓和', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    已解除: { label: '已解除', className: 'bg-slate-100 text-slate-700 border-slate-200' },
+    鏂板: { label: '鏂板', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+    鍗囩骇: { label: '鍗囩骇', className: 'bg-red-50 text-red-700 border-red-200' },
+    寮哄寲: { label: '寮哄寲', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+    缁存寔楂樹綅: { label: '楂樹綅', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+    缂撳拰: { label: '缂撳拰', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    宸茶В闄? { label: '宸茶В闄?, className: 'bg-slate-100 text-slate-700 border-slate-200' },
   };
   return map[latest] || null;
 }
 
 function buildWhyTree(item?: HighlightItem | null) {
   if (!item) return [];
-  const latestAction = item.history?.[item.history.length - 1]?.action || item.history?.[0]?.action || '新增';
-  const firstEvidence = item.evidence?.[0]?.title || '公开披露信息';
-  const firstFactor = item.factors?.[0] || '关键影响因素';
+  const latestAction = item.history?.[item.history.length - 1]?.action || item.history?.[0]?.action || '鏂板';
+  const firstEvidence = item.evidence?.[0]?.title || '鍏紑鎶湶淇℃伅';
+  const firstFactor = item.factors?.[0] || '鍏抽敭褰卞搷鍥犵礌';
   return [
-    `触发事件：${firstEvidence}`,
-    `识别信号：${firstFactor}`,
-    `状态变化：${latestAction}`,
-    `系统判断：${item.label}`,
-    `影响结论：${item.interpretation}`,
+    `瑙﹀彂浜嬩欢锛?{firstEvidence}`,
+    `璇嗗埆淇″彿锛?{firstFactor}`,
+    `鐘舵€佸彉鍖栵細${latestAction}`,
+    `绯荤粺鍒ゆ柇锛?{item.label}`,
+    `褰卞搷缁撹锛?{item.interpretation}`,
   ];
 }
 
 function getSourceClass(source?: string) {
-  if (source === '公司公告') return 'bg-blue-50 text-blue-700 border-blue-200';
-  if (source === '年度报告' || source === '财报数据' || source === '财务指标') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-  if (source === '法院/监管') return 'bg-red-50 text-red-700 border-red-200';
-  if (source === '行业观察' || source === '业务动态') return 'bg-amber-50 text-amber-700 border-amber-200';
-  if (source === '市场观察') return 'bg-slate-100 text-slate-700 border-slate-200';
+  if (source === '鍏徃鍏憡') return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (source === '骞村害鎶ュ憡' || source === '璐㈡姤鏁版嵁' || source === '璐㈠姟鎸囨爣') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+  if (source === '娉曢櫌/鐩戠') return 'bg-red-50 text-red-700 border-red-200';
+  if (source === '琛屼笟瑙傚療' || source === '涓氬姟鍔ㄦ€?) return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (source === '甯傚満瑙傚療') return 'bg-slate-100 text-slate-700 border-slate-200';
   return 'bg-violet-50 text-violet-700 border-violet-200';
 }
 
 function sortEvidence(evidence: EvidenceItem[] = []) {
   const sourceRank: Record<string, number> = {
-    公司公告: 5,
-    年度报告: 4,
-    财报数据: 4,
-    财务指标: 4,
-    '法院/监管': 3,
-    行业观察: 2,
-    业务动态: 2,
-    市场观察: 1,
-    综合判断: 1,
+    鍏徃鍏憡: 5,
+    骞村害鎶ュ憡: 4,
+    璐㈡姤鏁版嵁: 4,
+    璐㈠姟鎸囨爣: 4,
+    '娉曢櫌/鐩戠': 3,
+    琛屼笟瑙傚療: 2,
+    涓氬姟鍔ㄦ€? 2,
+    甯傚満瑙傚療: 1,
+    缁煎悎鍒ゆ柇: 1,
   };
-  const weightRank: Record<string, number> = { 高: 3, 中: 2, 低: 1 };
+  const weightRank: Record<string, number> = { 楂? 3, 涓? 2, 浣? 1 };
   return [...evidence].sort((a, b) => {
     const sourceDiff = (sourceRank[b.source] || 0) - (sourceRank[a.source] || 0);
     if (sourceDiff !== 0) return sourceDiff;
@@ -288,11 +289,11 @@ function sortEvidence(evidence: EvidenceItem[] = []) {
 function getDefaultRadarFromSummary(summary?: Summary) {
   if (!summary) return [];
   return [
-    { k: '风险强度', v: summary.totalRiskScore || 0 },
-    { k: '亮点强度', v: summary.totalPositiveScore || 0 },
-    { k: '风险数量', v: Math.min((summary.riskCount || 0) * 18, 100) },
-    { k: '亮点数量', v: Math.min((summary.positiveCount || 0) * 18, 100) },
-    { k: '可信度', v: summary.confidence || 0 },
+    { k: '椋庨櫓寮哄害', v: summary.totalRiskScore || 0 },
+    { k: '浜偣寮哄害', v: summary.totalPositiveScore || 0 },
+    { k: '椋庨櫓鏁伴噺', v: Math.min((summary.riskCount || 0) * 18, 100) },
+    { k: '浜偣鏁伴噺', v: Math.min((summary.positiveCount || 0) * 18, 100) },
+    { k: '鍙俊搴?, v: summary.confidence || 0 },
   ];
 }
 
@@ -326,19 +327,19 @@ function HighlightCard({
   const Icon = style.icon;
   const statusBadge = getLatestHistoryBadge(item);
   const latestAction = item.history?.[item.history.length - 1]?.action || item.history?.[0]?.action || '';
-  const isResolved = ['已解除', '缓和'].includes(latestAction);
+  const isResolved = ['宸茶В闄?, '缂撳拰'].includes(latestAction);
   const priorityLabel =
     item.side === 'risk'
       ? item.priority && item.priority >= 5
-        ? '核心风险'
+        ? '鏍稿績椋庨櫓'
         : item.priority && item.priority >= 4
-        ? '重点风险'
-        : '一般风险'
+        ? '閲嶇偣椋庨櫓'
+        : '涓€鑸闄?
       : item.priority && item.priority >= 5
-      ? '已强化亮点'
+      ? '宸插己鍖栦寒鐐?
       : item.priority && item.priority >= 4
-      ? '潜力亮点'
-      : '一般亮点';
+      ? '娼滃姏浜偣'
+      : '涓€鑸寒鐐?;
 
   return (
     <motion.div
@@ -354,7 +355,7 @@ function HighlightCard({
     >
       <div className="mb-3 flex items-center justify-end">
         <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => onOpen(item)}>
-          查看详情
+          鏌ョ湅璇︽儏
         </Button>
       </div>
 
@@ -375,7 +376,7 @@ function HighlightCard({
               </Badge>
             )}
             <Badge variant="outline" className="rounded-full">
-              影响度 {scoreToStars(item.stars)}
+              褰卞搷搴?{scoreToStars(item.stars)}
             </Badge>
             <Badge variant="outline" className="rounded-full bg-slate-900 text-white border-none">
               Score {item.score}
@@ -388,7 +389,7 @@ function HighlightCard({
                 <div className="text-xl font-semibold tracking-tight">{item.label}</div>
                 {item.game_view && (
                   <Badge variant="outline" className="rounded-full bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
-                    <Zap size={10} className="mr-1 inline-block" /> 深度博弈
+                    <Zap size={10} className="mr-1 inline-block" /> 娣卞害鍗氬紙
                   </Badge>
                 )}
               </div>
@@ -425,7 +426,7 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-sm leading-6 text-slate-600">
-                影响度 {scoreToStars(item.stars)} · 影响分 {item.score}
+                褰卞搷搴?{scoreToStars(item.stars)} 路 褰卞搷鍒?{item.score}
               </DialogDescription>
             </DialogHeader>
 
@@ -433,21 +434,21 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
               <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 p-5 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5"><Zap size={40} /></div>
                 <div className="flex items-center gap-2 text-sm font-bold text-amber-800 uppercase tracking-widest mb-3">
-                  <Sparkles size={16} /> Game Insight / 博弈逻辑研判
+                  <Sparkles size={16} /> Game Insight / 鍗氬紙閫昏緫鐮斿垽
                 </div>
                 <p className="text-sm font-medium leading-relaxed text-amber-900 italic">
-                  “ {item.game_view || '该事件触发常规逻辑判定，暂无深度博弈偏离信息。'} ”
+                  鈥?{item.game_view || '璇ヤ簨浠惰Е鍙戝父瑙勯€昏緫鍒ゅ畾锛屾殏鏃犳繁搴﹀崥寮堝亸绂讳俊鎭€?} 鈥?
                 </p>
                 <div className="mt-3 flex gap-2">
-                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none rounded-full text-[10px]">逻辑反转点</Badge>
-                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none rounded-full text-[10px]">资金博弈</Badge>
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none rounded-full text-[10px]">閫昏緫鍙嶈浆鐐?/Badge>
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none rounded-full text-[10px]">璧勯噾鍗氬紙</Badge>
                 </div>
               </div>
 
               <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-sm font-semibold">核心判断</div>
+                <div className="text-sm font-semibold">鏍稿績鍒ゆ柇</div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{item.why}</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600 font-medium">基本面解读：{item.interpretation}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600 font-medium">鍩烘湰闈㈣В璇伙細{item.interpretation}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(item.factors || []).map((factor) => (
                     <Badge key={factor} variant="secondary" className="rounded-full">
@@ -458,7 +459,7 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
               </div>
 
               <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="mb-3 text-sm font-semibold">原因链（WHY TREE）</div>
+                <div className="mb-3 text-sm font-semibold">鍘熷洜閾撅紙WHY TREE锛?/div>
                 <div className="space-y-3">
                   {buildWhyTree(item).map((node, idx) => (
                     <div key={`${node}-${idx}`} className="flex items-start gap-3">
@@ -470,35 +471,35 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
               </div>
 
               <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-sm font-semibold">证据摘要</div>
+                <div className="text-sm font-semibold">璇佹嵁鎽樿</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  当前最强证据主要来自
-                  <span className="mx-1 font-medium text-slate-900">{sortedEvidence[0]?.source || '公开信息'}</span>
-                  ，核心依据为
-                  <span className="mx-1 font-medium text-slate-900">{sortedEvidence[0]?.title || '暂无标题'}</span>
-                  。这类来源通常对看点判断影响更大，建议优先阅读。
+                  褰撳墠鏈€寮鸿瘉鎹富瑕佹潵鑷?
+                  <span className="mx-1 font-medium text-slate-900">{sortedEvidence[0]?.source || '鍏紑淇℃伅'}</span>
+                  锛屾牳蹇冧緷鎹负
+                  <span className="mx-1 font-medium text-slate-900">{sortedEvidence[0]?.title || '鏆傛棤鏍囬'}</span>
+                  銆傝繖绫绘潵婧愰€氬父瀵圭湅鐐瑰垽鏂奖鍝嶆洿澶э紝寤鸿浼樺厛闃呰銆?
                 </p>
               </div>
 
               <div>
-                <div className="mb-3 text-sm font-semibold">证据链（已按来源与权重排序）</div>
+                <div className="mb-3 text-sm font-semibold">璇佹嵁閾撅紙宸叉寜鏉ユ簮涓庢潈閲嶆帓搴忥級</div>
                 <div className="space-y-3">
                   {sortedEvidence.map((ev, idx) => (
                     <div key={`${ev.title}-${idx}`} className="rounded-2xl border bg-slate-50 p-4">
                       <div className="flex flex-wrap items-center gap-2">
                         {idx === 0 && (
                           <Badge variant="outline" className="rounded-full bg-violet-50 text-violet-700 border-violet-200">
-                            核心证据
+                            鏍稿績璇佹嵁
                           </Badge>
                         )}
                         <Badge variant="outline" className={`rounded-full ${getSourceClass(ev.source)}`}>
                           {ev.source}
                         </Badge>
-                        <Badge variant="secondary" className="rounded-full">权重 {ev.weight}</Badge>
+                        <Badge variant="secondary" className="rounded-full">鏉冮噸 {ev.weight}</Badge>
                         <span className="text-xs text-slate-500">{ev.time}</span>
                         {ev.url && (
                           <a className="inline-flex items-center gap-1 text-xs text-slate-500 underline" href={ev.url} target="_blank" rel="noreferrer">
-                            原文 <ExternalLink className="h-3 w-3" />
+                            鍘熸枃 <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
                       </div>
@@ -510,7 +511,7 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
               </div>
 
               <div>
-                <div className="mb-3 text-sm font-semibold">完整历史时间线</div>
+                <div className="mb-3 text-sm font-semibold">瀹屾暣鍘嗗彶鏃堕棿绾?/div>
                 <div className="space-y-3">
                   {(item.history || []).map((h, idx) => (
                     <div key={`${h.date}-${idx}`} className="flex items-start gap-3 rounded-2xl border p-4">
@@ -538,7 +539,7 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
 }
 
 export default function StockHighlightsPrototype() {
-  // 核心状态：聚合为单一事实来源
+  // 鏍稿績鐘舵€侊細鑱氬悎涓哄崟涓€浜嬪疄鏉ユ簮
   const [stockState, setStockState] = useState<{
     data: StockViewModel | null;
     history: HistoryItem[];
@@ -555,13 +556,13 @@ export default function StockHighlightsPrototype() {
   const [sortMode, setSortMode] = useState('score');
   const [activeHighlight, setActiveHighlight] = useState<HighlightItem | null>(null);
   
-  // 快照与对比系统 (v4.0)
+  // 蹇収涓庡姣旂郴缁?(v4.0)
   const [snapshots, setSnapshots] = useState<SnapshotPoint[]>([]);
   const [compareBase, setCompareBase] = useState<SnapshotPoint | null>(null);
   const [isSnapshotDrawerOpen, setIsSnapshotDrawerOpen] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
 
-  // 搜索相关项
+  // 鎼滅储鐩稿叧椤?
   const [searchResults, setSearchResults] = useState<SearchStock[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isQuickSearching, setIsQuickSearching] = useState(false);
@@ -569,15 +570,15 @@ export default function StockHighlightsPrototype() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [compareWindow, setCompareWindow] = useState('1m');
 
-  // 全局键盘监听：灵动小键盘逻辑
+  // 鍏ㄥ眬閿洏鐩戝惉锛氱伒鍔ㄥ皬閿洏閫昏緫
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 如果已经打开了 Dialog，或者正在输入框中，不触发
+      // 濡傛灉宸茬粡鎵撳紑浜?Dialog锛屾垨鑰呮鍦ㄨ緭鍏ユ涓紝涓嶈Е鍙?
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || activeHighlight) {
         return;
       }
 
-      // 如果按下的是字母、数字
+      // 濡傛灉鎸変笅鐨勬槸瀛楁瘝銆佹暟瀛?
       if (/^[a-z0-9]$/i.test(e.key)) {
         setIsQuickSearching(true);
         setQuickSearchInput(e.key);
@@ -624,7 +625,7 @@ export default function StockHighlightsPrototype() {
     };
   }, [quickSearchInput, isQuickSearching]);
 
-  // 加载快照列表
+  // 鍔犺浇蹇収鍒楄〃
   const loadSnapshots = async (code: string) => {
     try {
       const data = await stockHighlightsApi.getStockSnapshots(code);
@@ -643,7 +644,7 @@ export default function StockHighlightsPrototype() {
       });
       await loadSnapshots(selectedCode);
     } catch (err) {
-      alert("快照保存失败");
+      alert("蹇収淇濆瓨澶辫触");
     } finally {
       setIsSavingSnapshot(false);
     }
@@ -675,7 +676,7 @@ export default function StockHighlightsPrototype() {
           data: {
             code: highlightsRes.stock.code,
             name: highlightsRes.stock.name,
-            industry: highlightsRes.stock.industry || '未分类行业',
+            industry: highlightsRes.stock.industry || '鏈垎绫昏涓?,
             marketImpression: highlightsRes.marketImpression,
             headline: highlightsRes.headline,
             summary: highlightsRes.summary,
@@ -684,12 +685,12 @@ export default function StockHighlightsPrototype() {
             radar: highlightsRes.radar?.length ? highlightsRes.radar : getDefaultRadarFromSummary(highlightsRes.summary),
             trend: (highlightsRes.priceHistory || []).map(p => {
               const histDate = p.date.slice(5); // MM-DD
-              // 寻找当天的历史记录（若有更新则标记为事件）
+              // 瀵绘壘褰撳ぉ鐨勫巻鍙茶褰曪紙鑻ユ湁鏇存柊鍒欐爣璁颁负浜嬩欢锛?
               const isEvent = (history || []).some(h => h.date === p.date);
               return {
                 date: histDate,
                 price: p.price,
-                risk: highlightsRes.summary.totalRiskScore, // 默认显示当前分值，后续可扩展历史分值回溯
+                risk: highlightsRes.summary.totalRiskScore, // 榛樿鏄剧ず褰撳墠鍒嗗€硷紝鍚庣画鍙墿灞曞巻鍙插垎鍊煎洖婧?
                 positive: highlightsRes.summary.totalPositiveScore,
                 isEvent: isEvent
               };
@@ -701,13 +702,13 @@ export default function StockHighlightsPrototype() {
         });
       } catch (err: any) {
         if (!ignore) {
-          setStockState({ data: null, history: [], loading: false, error: err?.message || '获取数据失败' });
+          setStockState({ data: null, history: [], loading: false, error: err?.message || '鑾峰彇鏁版嵁澶辫触' });
         }
       }
     }
     fetchAll();
     loadSnapshots(selectedCode);
-    setCompareBase(null); // 切换股票时重置对比
+    setCompareBase(null); // 鍒囨崲鑲＄エ鏃堕噸缃姣?
     return () => { ignore = true; };
   }, [selectedCode]);
 
@@ -719,12 +720,12 @@ export default function StockHighlightsPrototype() {
     const rows = items.map(item => {
       const latest = item.history?.[item.history.length - 1]?.action || item.history?.[0]?.action || '';
       let priority = 3;
-      if (latest === '已解除') priority = 0;
-      else if (latest === '缓和') priority = 1;
+      if (latest === '宸茶В闄?) priority = 0;
+      else if (latest === '缂撳拰') priority = 1;
       else if (item.side === 'risk') {
-        priority = item.stars >= 5 || ['升级', '维持高位'].includes(latest) ? 5 : item.stars >= 4 ? 4 : 3;
+        priority = item.stars >= 5 || ['鍗囩骇', '缁存寔楂樹綅'].includes(latest) ? 5 : item.stars >= 4 ? 4 : 3;
       } else {
-        priority = latest === '强化' && item.stars >= 4 ? 5 : item.stars >= 3 ? 4 : 3;
+        priority = latest === '寮哄寲' && item.stars >= 4 ? 5 : item.stars >= 3 ? 4 : 3;
       }
       return { ...item, priority, freshness: item.history?.[0]?.date || '' };
     });
@@ -736,7 +737,7 @@ export default function StockHighlightsPrototype() {
     });
   }, [stockState.data, sideFilter, sortMode]);
 
-  // 对比算法 (v4.0)
+  // 瀵规瘮绠楁硶 (v4.0)
   const getHighlightDiff = (item: HighlightItem) => {
     if (!compareBase) return null;
     const oldItem = compareBase.highlights.find(h => h.id === item.id);
@@ -780,10 +781,10 @@ export default function StockHighlightsPrototype() {
       riskDelta: currentPrice.risk - basePoint.risk,
       positiveDelta: currentPrice.positive - basePoint.positive,
       addedLabels: stockState.data.highlights
-        .filter(i => (i.history || []).some(h => h.action === '新增' && h.date >= cutoffStr))
+        .filter(i => (i.history || []).some(h => h.action === '鏂板' && h.date >= cutoffStr))
         .map(i => i.label).slice(0, 4),
       strengthenedLabels: stockState.data.highlights
-        .filter(i => (i.history || []).some(h => ['升级', '强化', '维持高位'].includes(h.action) && h.date >= cutoffStr))
+        .filter(i => (i.history || []).some(h => ['鍗囩骇', '寮哄寲', '缁存寔楂樹綅'].includes(h.action) && h.date >= cutoffStr))
         .map(i => i.label).slice(0, 4),
     };
   }, [compareWindow, stockState.data]);
@@ -796,7 +797,7 @@ export default function StockHighlightsPrototype() {
     setSelectedCode(code);
     localStorage.setItem('last_stock_code', code);
     
-    // 更新最近搜索
+    // 鏇存柊鏈€杩戞悳绱?
     if (typeof stock !== 'string') {
       const updated = [stock, ...recentStocks.filter(s => s.code !== stock.code)].slice(0, 6);
       setRecentStocks(updated);
@@ -816,13 +817,13 @@ export default function StockHighlightsPrototype() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">个股智策 <span className="mx-1 text-slate-300 font-light">|</span> <span className="text-slate-500 font-medium">穿透式投研终端</span></h1>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">涓偂鏅虹瓥 <span className="mx-1 text-slate-300 font-light">|</span> <span className="text-slate-500 font-medium">绌块€忓紡鎶曠爺缁堢</span></h1>
                 <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-[10px] py-0 px-2 font-bold text-emerald-700 uppercase tracking-wider animate-pulse">
                   Terminal v4.2.0 FINAL
                 </Badge>
               </div>
               <p className="mt-0.5 text-xs font-medium text-slate-400">
-                基于巨潮真实公告证据链的深度价值挖掘 · 生产级语义穿透系统
+                鍩轰簬宸ㄦ疆鐪熷疄鍏憡璇佹嵁閾剧殑娣卞害浠峰€兼寲鎺?路 鐢熶骇绾ц涔夌┛閫忕郴缁?
               </p>
             </div>
           </div>
@@ -831,13 +832,13 @@ export default function StockHighlightsPrototype() {
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Status</div>
               <div className="mt-1 flex items-center justify-end gap-1.5 text-xs font-semibold text-emerald-600">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                后台数据链已连接
+                鍚庡彴鏁版嵁閾惧凡杩炴帴
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* 灵动小键盘 Overlay */}
+        {/* 鐏靛姩灏忛敭鐩?Overlay */}
         {isQuickSearching && (
           <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/40 pt-[15vh] backdrop-blur-md" onClick={() => setIsQuickSearching(false)}>
             <motion.div 
@@ -851,7 +852,7 @@ export default function StockHighlightsPrototype() {
                 <input
                   autoFocus
                   className="w-full bg-transparent pl-10 pr-10 text-xl font-medium outline-none placeholder:text-slate-300"
-                  placeholder="搜索代码、首字母或名称..."
+                  placeholder="鎼滅储浠ｇ爜銆侀瀛楁瘝鎴栧悕绉?.."
                   value={quickSearchInput}
                   onChange={e => setQuickSearchInput(e.target.value)}
                   onKeyDown={e => {
@@ -864,7 +865,7 @@ export default function StockHighlightsPrototype() {
                       if (selected) {
                         selectStock(selected);
                       } else if (/^\d{6}$/.test(quickSearchInput)) {
-                        selectStock({ code: quickSearchInput, name: `代码 ${quickSearchInput}`, industry: '快速穿透' });
+                        selectStock({ code: quickSearchInput, name: `浠ｇ爜 ${quickSearchInput}`, industry: '蹇€熺┛閫? });
                       }
                     }
                   }}
@@ -878,11 +879,11 @@ export default function StockHighlightsPrototype() {
               </div>
               <div className="max-h-[460px] min-h-[100px] overflow-y-auto p-2">
                 {!quickSearchInput && recentStocks.length > 0 && (
-                  <div className="mb-2 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">最近查看 RECENT_TICKERS</div>
+                  <div className="mb-2 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">鏈€杩戞煡鐪?RECENT_TICKERS</div>
                 )}
                 {isSearching && searchResults.length === 0 ? (
                   <div className="flex items-center justify-center p-12 text-slate-400">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 智能情报检索中...
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 鏅鸿兘鎯呮姤妫€绱腑...
                   </div>
                 ) : (quickSearchInput ? searchResults : recentStocks).length > 0 ? (
                       (quickSearchInput ? searchResults : recentStocks).map((item, idx) => (
@@ -923,13 +924,13 @@ export default function StockHighlightsPrototype() {
                       {quickSearchInput ? 'NO_MATCHING_COMMAND' : 'WAITING_FOR_INPUT'}
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
-                      输入拼音首字母如 'payh' 开启搜索
+                      杈撳叆鎷奸煶棣栧瓧姣嶅 'payh' 寮€鍚悳绱?
                     </div>
                   </div>
                 )}
               </div>
               <div className="bg-slate-50/50 p-3 text-center text-[10px] text-slate-400 border-t font-mono uppercase tracking-widest">
-                UP/DOWN TO SELECT · ENTER TO EXECUTE · ESC TO DISMISS
+                UP/DOWN TO SELECT 路 ENTER TO EXECUTE 路 ESC TO DISMISS
               </div>
             </motion.div>
           </div>
@@ -937,7 +938,7 @@ export default function StockHighlightsPrototype() {
 
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs text-slate-400 font-medium tracking-wider uppercase">
-            键盘输入任何内容即可开启搜索 · 直接输入 6 位代码快速触达
+            閿洏杈撳叆浠讳綍鍐呭鍗冲彲寮€鍚悳绱?路 鐩存帴杈撳叆 6 浣嶄唬鐮佸揩閫熻Е杈?
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-2xl border bg-white p-1">
@@ -947,16 +948,16 @@ export default function StockHighlightsPrototype() {
                   onClick={() => setSideFilter(val)}
                   className={`px-4 py-1.5 text-sm font-medium rounded-xl transition ${sideFilter === val ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                  {val === 'all' ? '全部' : val === 'risk' ? '风险' : '亮点'}
+                  {val === 'all' ? '鍏ㄩ儴' : val === 'risk' ? '椋庨櫓' : '浜偣'}
                 </button>
               ))}
             </div>
             <Select value={sortMode} onValueChange={setSortMode}>
-              <SelectTrigger className="h-9 w-[160px] rounded-2xl bg-white text-sm"><SelectValue placeholder="排序方式" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-[160px] rounded-2xl bg-white text-sm"><SelectValue placeholder="鎺掑簭鏂瑰紡" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="score">按影响力</SelectItem>
-                <SelectItem value="stars">按星级</SelectItem>
-                <SelectItem value="recent">最近更新</SelectItem>
+                <SelectItem value="score">鎸夊奖鍝嶅姏</SelectItem>
+                <SelectItem value="stars">鎸夋槦绾?/SelectItem>
+                <SelectItem value="recent">鏈€杩戞洿鏂?/SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -967,7 +968,7 @@ export default function StockHighlightsPrototype() {
             <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
               <RefreshCw className="h-5 w-5 animate-spin text-slate-500" />
             </div>
-            <div className="text-base font-semibold">正在检索穿透数据...</div>
+            <div className="text-base font-semibold">姝ｅ湪妫€绱㈢┛閫忔暟鎹?..</div>
           </div>
         ) : !stockState.data ? (
           <div className="rounded-[40px] border border-dashed border-slate-200 bg-white p-20 text-center shadow-sm">
@@ -977,7 +978,7 @@ export default function StockHighlightsPrototype() {
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-900">Intelligent Terminal Ready</h2>
               <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-500">
-                {stockState.error ? `ERR_SYSTEM: ${stockState.error}` : '系统已就绪。正在监听全域公告与研报数据，按键盘任意键开启智能透视分析。'}
+                {stockState.error ? `ERR_SYSTEM: ${stockState.error}` : '绯荤粺宸插氨缁€傛鍦ㄧ洃鍚叏鍩熷叕鍛婁笌鐮旀姤鏁版嵁锛屾寜閿洏浠绘剰閿紑鍚櫤鑳介€忚鍒嗘瀽銆?}
               </p>
               <div className="mt-8 flex items-center justify-center gap-4">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -992,7 +993,7 @@ export default function StockHighlightsPrototype() {
         ) : (
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
             <div className="space-y-6">
-              {/* v2.2.9: 核心市场印象/快照 (Prominent Recovery) */}
+              {/* v2.2.9: 鏍稿績甯傚満鍗拌薄/蹇収 (Prominent Recovery) */}
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border bg-slate-900 p-6 text-white shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-10"><Zap size={80} /></div>
                 <div className="relative z-10">
@@ -1013,13 +1014,13 @@ export default function StockHighlightsPrototype() {
                   </div>
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-widest">
-                      <Sparkles size={14} /> Market Impression / 市场印象
+                      <Sparkles size={14} /> Market Impression / 甯傚満鍗拌薄
                     </div>
                     <p className="text-lg font-medium leading-relaxed text-slate-100">
                       {stockState.data.marketImpression}
                     </p>
                     <div className="flex items-center gap-6 pt-2">
-                       <div className="text-xs text-slate-400"><span className="font-bold text-white tracking-widest uppercase">Sentiment:</span> {stockState.data.summary.sentiment === 'bullish' ? '🔥 看多' : '🧊 中性/看空'}</div>
+                       <div className="text-xs text-slate-400"><span className="font-bold text-white tracking-widest uppercase">Sentiment:</span> {stockState.data.summary.sentiment === 'bullish' ? '馃敟 鐪嬪' : '馃 涓€?鐪嬬┖'}</div>
                        <div className="text-xs text-slate-400"><span className="font-bold text-white tracking-widest uppercase">Popularity:</span> No.{stockState.data.xueqiu?.rank || 'N/A'}</div>
                     </div>
                   </div>
@@ -1029,7 +1030,7 @@ export default function StockHighlightsPrototype() {
                       className="rounded-xl bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
                     >
                       <History className="mr-2 h-4 w-4 text-indigo-400" />
-                      时光机历史
+                      鏃跺厜鏈哄巻鍙?
                       {snapshots.length > 0 && <Badge className="ml-2 bg-indigo-500/20 text-indigo-400">{snapshots.length}</Badge>}
                     </Button>
                     <Button 
@@ -1038,7 +1039,7 @@ export default function StockHighlightsPrototype() {
                       className="rounded-xl bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
                     >
                       {isSavingSnapshot ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock3 className="mr-2 h-4 w-4 text-emerald-400" />}
-                      封存当前快照
+                      灏佸瓨褰撳墠蹇収
                     </Button>
                   </div>
                 </div>
@@ -1046,7 +1047,7 @@ export default function StockHighlightsPrototype() {
 
               <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
                 <Card className="rounded-3xl border shadow-sm">
-                  <CardHeader><SectionTitle icon={BarChart3} title="情报趋势" /></CardHeader>
+                  <CardHeader><SectionTitle icon={BarChart3} title="鎯呮姤瓒嬪娍" /></CardHeader>
                   <CardContent className="h-[280px] p-4">
                     <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                       <ComposedChart data={stockState.data.trend || []}>
@@ -1063,25 +1064,25 @@ export default function StockHighlightsPrototype() {
                           contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255,255,255,0.95)'}} 
                           itemStyle={{fontSize: '12px', fontWeight: 'bold'}}
                         />
-                        <Area yAxisId="right" type="monotone" dataKey="price" stroke="#3b82f6" fillOpacity={1} fill="url(#colorPrice)" name="股价反向" />
-                        <Line yAxisId="left" type="stepAfter" name="风险分" dataKey="risk" stroke="#ef4444" strokeWidth={2} dot={false} />
-                        <Line yAxisId="left" type="stepAfter" name="亮点分" dataKey="positive" stroke="#10b981" strokeWidth={2} dot={false} />
-                        {/* 事件锚点标记 */}
-                        <Scatter yAxisId="left" data={stockState.data.trend.filter(t => t.isEvent)} fill="#f59e0b" name="研判节点" />
+                        <Area yAxisId="right" type="monotone" dataKey="price" stroke="#3b82f6" fillOpacity={1} fill="url(#colorPrice)" name="鑲′环鍙嶅悜" />
+                        <Line yAxisId="left" type="stepAfter" name="椋庨櫓鍒? dataKey="risk" stroke="#ef4444" strokeWidth={2} dot={false} />
+                        <Line yAxisId="left" type="stepAfter" name="浜偣鍒? dataKey="positive" stroke="#10b981" strokeWidth={2} dot={false} />
+                        {/* 浜嬩欢閿氱偣鏍囪 */}
+                        <Scatter yAxisId="left" data={stockState.data.trend.filter(t => t.isEvent)} fill="#f59e0b" name="鐮斿垽鑺傜偣" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
 
                 <Card className="rounded-3xl border shadow-sm">
-                  <CardHeader><SectionTitle icon={ShieldAlert} title="数据穿透画像" subtitle="基于公告证据权重的核心维度量化" /></CardHeader>
+                  <CardHeader><SectionTitle icon={ShieldAlert} title="鏁版嵁绌块€忕敾鍍? subtitle="鍩轰簬鍏憡璇佹嵁鏉冮噸鐨勬牳蹇冪淮搴﹂噺鍖? /></CardHeader>
                   <CardContent className="flex h-[320px] items-center justify-center p-4">
                     <ResponsiveContainer width="100%" height="100%" minHeight={280}>
                       <RadarChart cx="50%" cy="50%" outerRadius="80%" data={stockState.data.radar || []}>
                         <PolarGrid stroke="#e2e8f0" />
                         <PolarAngleAxis dataKey="k" tick={{fontSize: 12, fontWeight: 500}} />
                         <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} />
-                        <Radar name="强度" dataKey="v" stroke="#0f172a" fill="#0f172a" fillOpacity={0.15} />
+                        <Radar name="寮哄害" dataKey="v" stroke="#0f172a" fill="#0f172a" fillOpacity={0.15} />
                       </RadarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -1091,14 +1092,14 @@ export default function StockHighlightsPrototype() {
               <Card className="rounded-3xl border shadow-sm">
                 <CardHeader>
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <SectionTitle icon={FileText} title="核心看点卡片" />
-                    <div className="flex items-center gap-2 text-sm text-slate-500"><Filter className="h-4 w-4" /> 当前共 {filteredHighlights.length} 条</div>
+                    <SectionTitle icon={FileText} title="鏍稿績鐪嬬偣鍗＄墖" />
+                    <div className="flex items-center gap-2 text-sm text-slate-500"><Filter className="h-4 w-4" /> 褰撳墠鍏?{filteredHighlights.length} 鏉?/div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Accordion type="multiple" defaultValue={["risk", "positive"]} className="w-full space-y-3">
                     <AccordionItem value="risk" className="rounded-2xl border">
-                      <AccordionTrigger className="px-4 text-base font-semibold">分析面：潜在隐忧与风险线索</AccordionTrigger>
+                      <AccordionTrigger className="px-4 text-base font-semibold">鍒嗘瀽闈細娼滃湪闅愬咖涓庨闄╃嚎绱?/AccordionTrigger>
                       <AccordionContent className="space-y-4 px-2 pb-2">
                         {filteredHighlights.filter((i) => i.side === 'risk').map((item) => (
                           <HighlightCard key={item.id} item={item} onOpen={setActiveHighlight} diff={getHighlightDiff(item)} />
@@ -1106,7 +1107,7 @@ export default function StockHighlightsPrototype() {
                       </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="positive" className="rounded-2xl border">
-                      <AccordionTrigger className="px-4 text-base font-semibold">基本面：价值亮点与博弈机会</AccordionTrigger>
+                      <AccordionTrigger className="px-4 text-base font-semibold">鍩烘湰闈細浠峰€间寒鐐逛笌鍗氬紙鏈轰細</AccordionTrigger>
                       <AccordionContent className="space-y-4 px-2 pb-2">
                         {filteredHighlights.filter((i) => i.side === 'positive').map((item) => (
                           <HighlightCard key={item.id} item={item} onOpen={setActiveHighlight} diff={getHighlightDiff(item)} />
@@ -1117,7 +1118,7 @@ export default function StockHighlightsPrototype() {
 
                   {compareBase && removedHighlights.length > 0 && (
                     <div className="mt-8 pt-8 border-t border-dashed">
-                      <div className="mb-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-2">已消失/已解除的旧看点 (对比历史镜像)</div>
+                      <div className="mb-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-2">宸叉秷澶?宸茶В闄ょ殑鏃х湅鐐?(瀵规瘮鍘嗗彶闀滃儚)</div>
                       <div className="space-y-4 opacity-50 grayscale">
                         {removedHighlights.map((item) => (
                           <HighlightCard key={`removed-${item.id}`} item={item} onOpen={setActiveHighlight} diff="removed" />
@@ -1131,13 +1132,13 @@ export default function StockHighlightsPrototype() {
               <Card className="rounded-3xl border shadow-sm">
                 <CardHeader>
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <SectionTitle icon={TrendingUp} title="对比模式" subtitle="直接比较当前与近 1 / 3 / 6 个月的变化" />
+                    <SectionTitle icon={TrendingUp} title="瀵规瘮妯″紡" subtitle="鐩存帴姣旇緝褰撳墠涓庤繎 1 / 3 / 6 涓湀鐨勫彉鍖? />
                     <Select value={compareWindow} onValueChange={setCompareWindow}>
                       <SelectTrigger className="h-10 w-[140px] rounded-2xl bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="1m">近 1 个月</SelectItem>
-                        <SelectItem value="3m">近 3 个月</SelectItem>
-                        <SelectItem value="6m">近 6 个月</SelectItem>
+                        <SelectItem value="1m">杩?1 涓湀</SelectItem>
+                        <SelectItem value="3m">杩?3 涓湀</SelectItem>
+                        <SelectItem value="6m">杩?6 涓湀</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1145,25 +1146,25 @@ export default function StockHighlightsPrototype() {
                 <CardContent>
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs text-slate-500">风险强度变化</div>
+                      <div className="text-xs text-slate-500">椋庨櫓寮哄害鍙樺寲</div>
                       <div className="mt-2 text-2xl font-bold">{compareSummary.riskDelta >= 0 ? '+' : ''}{compareSummary.riskDelta}</div>
-                      <p className="mt-2 text-sm text-slate-600">正值表示风险强度抬升，负值表示风险缓和。</p>
+                      <p className="mt-2 text-sm text-slate-600">姝ｅ€艰〃绀洪闄╁己搴︽姮鍗囷紝璐熷€艰〃绀洪闄╃紦鍜屻€?/p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs text-slate-500">亮点强度变化</div>
+                      <div className="text-xs text-slate-500">浜偣寮哄害鍙樺寲</div>
                       <div className="mt-2 text-2xl font-bold">{compareSummary.positiveDelta >= 0 ? '+' : ''}{compareSummary.positiveDelta}</div>
-                      <p className="mt-2 text-sm text-slate-600">正值表示亮点增强，负值表示亮点减弱。</p>
+                      <p className="mt-2 text-sm text-slate-600">姝ｅ€艰〃绀轰寒鐐瑰寮猴紝璐熷€艰〃绀轰寒鐐瑰噺寮便€?/p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs text-slate-500">新增看点</div>
+                      <div className="text-xs text-slate-500">鏂板鐪嬬偣</div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {(compareSummary.addedLabels.length > 0 ? compareSummary.addedLabels : ['暂无']).map((label) => <Badge key={label} variant="secondary" className="rounded-full">{label}</Badge>)}
+                        {(compareSummary.addedLabels.length > 0 ? compareSummary.addedLabels : ['鏆傛棤']).map((label) => <Badge key={label} variant="secondary" className="rounded-full">{label}</Badge>)}
                       </div>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs text-slate-500">强化 / 升级看点</div>
+                      <div className="text-xs text-slate-500">寮哄寲 / 鍗囩骇鐪嬬偣</div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {(compareSummary.strengthenedLabels.length > 0 ? compareSummary.strengthenedLabels : ['暂无']).map((label) => <Badge key={label} variant="secondary" className="rounded-full">{label}</Badge>)}
+                        {(compareSummary.strengthenedLabels.length > 0 ? compareSummary.strengthenedLabels : ['鏆傛棤']).map((label) => <Badge key={label} variant="secondary" className="rounded-full">{label}</Badge>)}
                       </div>
                     </div>
                   </div>
@@ -1171,7 +1172,7 @@ export default function StockHighlightsPrototype() {
               </Card>
 
               <Card className="rounded-3xl border shadow-sm">
-                <CardHeader><SectionTitle icon={History} title="边际驱动分析" /></CardHeader>
+                <CardHeader><SectionTitle icon={History} title="杈归檯椹卞姩鍒嗘瀽" /></CardHeader>
                 <CardContent>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl bg-red-50 p-4 border border-red-100">
@@ -1179,16 +1180,16 @@ export default function StockHighlightsPrototype() {
                       <p className="mt-2 text-sm leading-relaxed text-red-900">
                         {compareSummary.riskDelta > 0 ? (
                           <>
-                            风险敞口扩大，主因：
+                            椋庨櫓鏁炲彛鎵╁ぇ锛屼富鍥狅細
                             <button className="mx-1 underline font-bold" onClick={() => {
                               const target = stockState.data?.highlights.find(h => h.label === compareSummary.strengthenedLabels[0]);
                               if (target) setActiveHighlight(target);
                             }}>
-                              {compareSummary.strengthenedLabels[0] || '核心风险强化'}
+                              {compareSummary.strengthenedLabels[0] || '鏍稿績椋庨櫓寮哄寲'}
                             </button>
-                            。此类因子具备较强惯性，建议规避。
+                            銆傛绫诲洜瀛愬叿澶囪緝寮烘儻鎬э紝寤鸿瑙勯伩銆?
                           </>
-                        ) : compareSummary.riskDelta < 0 ? '风险端出现边际改善，原有高压因子有所缓解，属于正面信号。' : '风险格局保持死锁，暂无新增冲击，但也未见逻辑反转。'}
+                        ) : compareSummary.riskDelta < 0 ? '椋庨櫓绔嚭鐜拌竟闄呮敼鍠勶紝鍘熸湁楂樺帇鍥犲瓙鏈夋墍缂撹В锛屽睘浜庢闈俊鍙枫€? : '椋庨櫓鏍煎眬淇濇寔姝婚攣锛屾殏鏃犳柊澧炲啿鍑伙紝浣嗕篃鏈閫昏緫鍙嶈浆銆?}
                       </p>
                     </div>
                     <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
@@ -1196,16 +1197,16 @@ export default function StockHighlightsPrototype() {
                       <p className="mt-2 text-sm leading-relaxed text-emerald-900">
                         {compareSummary.positiveDelta > 0 ? (
                           <>
-                            价值面增强，动力源：
+                            浠峰€奸潰澧炲己锛屽姩鍔涙簮锛?
                             <button className="mx-1 underline font-bold" onClick={() => {
                               const target = stockState.data?.highlights.find(h => h.label === compareSummary.addedLabels[0]);
                               if (target) setActiveHighlight(target);
                             }}>
-                              {compareSummary.addedLabels[0] || '新增逻辑确认'}
+                              {compareSummary.addedLabels[0] || '鏂板閫昏緫纭'}
                             </button>
-                            。建议关注业绩兑现力度。
+                            銆傚缓璁叧娉ㄤ笟缁╁厬鐜板姏搴︺€?
                           </>
-                        ) : compareSummary.positiveDelta < 0 ? '亮点逻辑出现钝化，市场关注度可能自然回落，建议审慎追踪。' : '亮点因子供需平衡，处于逻辑真空期。'}
+                        ) : compareSummary.positiveDelta < 0 ? '浜偣閫昏緫鍑虹幇閽濆寲锛屽競鍦哄叧娉ㄥ害鍙兘鑷劧鍥炶惤锛屽缓璁鎱庤拷韪€? : '浜偣鍥犲瓙渚涢渶骞宠　锛屽浜庨€昏緫鐪熺┖鏈熴€?}
                       </p>
                     </div>
                   </div>
@@ -1213,21 +1214,21 @@ export default function StockHighlightsPrototype() {
               </Card>
 
               <Card className="rounded-3xl border shadow-sm">
-                <CardHeader><SectionTitle icon={TrendingUp} title="未来预期" /></CardHeader>
+                <CardHeader><SectionTitle icon={TrendingUp} title="鏈潵棰勬湡" /></CardHeader>
                 <CardContent>
-                  {/* 2.2.0 新增：实时情报仪表盘 */}
+                  {/* 2.2.0 鏂板锛氬疄鏃舵儏鎶ヤ华琛ㄧ洏 */}
         <div className="mb-6 grid gap-6 md:grid-cols-4">
           <Card className="col-span-1 rounded-3xl border bg-slate-900 text-white shadow-xl overflow-hidden">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">雪球人气榜</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">闆悆浜烘皵姒?/span>
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-black text-emerald-400">{stockState.data.xueqiu?.rank || 'N/A'}</div>
               <div className="mt-2 text-xs text-slate-400">
-                {stockState.data.xueqiu?.followers?.toLocaleString()} 位投资者深度关注
+                {stockState.data.xueqiu?.followers?.toLocaleString()} 浣嶆姇璧勮€呮繁搴﹀叧娉?
               </div>
               <div className="mt-4 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
                 <div 
@@ -1241,10 +1242,10 @@ export default function StockHighlightsPrototype() {
           <Card className="col-span-3 rounded-3xl border shadow-sm overflow-hidden">
             <CardHeader className="py-3 bg-slate-50 border-b">
               <div className="flex items-center justify-between">
-                <SectionTitle icon={Zap} title="7x24 情报闪电流" />
+                <SectionTitle icon={Zap} title="7x24 鎯呮姤闂數娴? />
                 <div className="flex items-center gap-2">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">实时情报扫描中</span>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">瀹炴椂鎯呮姤鎵弿涓?/span>
                 </div>
               </div>
             </CardHeader>
@@ -1264,7 +1265,7 @@ export default function StockHighlightsPrototype() {
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold">{news.source}</span>
                         {news.tag && (
                           <span className={`text-[9px] px-1 py-0.5 rounded font-black border ${
-                            news.tag === '个股' ? 'border-orange-200 bg-orange-50 text-orange-600' : 'border-slate-200 bg-slate-50 text-slate-600'
+                            news.tag === '涓偂' ? 'border-orange-200 bg-orange-50 text-orange-600' : 'border-slate-200 bg-slate-50 text-slate-600'
                           }`}>
                             {news.tag}
                           </span>
@@ -1277,7 +1278,7 @@ export default function StockHighlightsPrototype() {
                 ) : (
                   <div className="p-8 text-center text-slate-400">
                     <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
-                    <p className="text-xs italic">正在尝试匹配个股及相关行业情报...</p>
+                    <p className="text-xs italic">姝ｅ湪灏濊瘯鍖归厤涓偂鍙婄浉鍏宠涓氭儏鎶?..</p>
                   </div>
                 )}
               </div>
@@ -1287,16 +1288,16 @@ export default function StockHighlightsPrototype() {
 
         <div className="grid gap-6 lg:grid-cols-3">
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-sm font-semibold">分析师共识</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.consensus || '数据暂不可用'}</p>
+                      <div className="text-sm font-semibold">鍒嗘瀽甯堝叡璇?/div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.consensus || '鏁版嵁鏆備笉鍙敤'}</p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-sm font-semibold">短期预期</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.shortTerm || '数据暂不可用'}</p>
+                      <div className="text-sm font-semibold">鐭湡棰勬湡</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.shortTerm || '鏁版嵁鏆備笉鍙敤'}</p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-sm font-semibold">估值变化预期</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.valuation || '数据暂不可用'}</p>
+                      <div className="text-sm font-semibold">浼板€煎彉鍖栭鏈?/div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{stockState.data.outlook?.valuation || '鏁版嵁鏆備笉鍙敤'}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -1305,7 +1306,7 @@ export default function StockHighlightsPrototype() {
 
             <div className="space-y-6">
               <Card className="rounded-3xl border shadow-sm">
-                <CardHeader><SectionTitle icon={Clock3} title="最近动态变化" subtitle="直接看新增、升级、缓和等动作" /></CardHeader>
+                <CardHeader><SectionTitle icon={Clock3} title="鏈€杩戝姩鎬佸彉鍖? subtitle="鐩存帴鐪嬫柊澧炪€佸崌绾с€佺紦鍜岀瓑鍔ㄤ綔" /></CardHeader>
                 <CardContent className="space-y-3">
                     {latestChanges.map((item, idx) => {
                       const style = sideStyle[item.side as 'risk' | 'positive'];
@@ -1325,7 +1326,7 @@ export default function StockHighlightsPrototype() {
                               <span className="text-xs text-slate-500">{item.date}</span>
                             </div>
                             <div className="mt-1 text-sm font-semibold">{item.label}</div>
-                            <div className="mt-1 text-sm text-slate-600">{item.action} · {item.desc}</div>
+                            <div className="mt-1 text-sm text-slate-600">{item.action} 路 {item.desc}</div>
                           </div>
                           <ChevronRight className="mt-1 h-4 w-4 text-slate-400" />
                         </button>
@@ -1335,18 +1336,18 @@ export default function StockHighlightsPrototype() {
               </Card>
 
               <Card className="rounded-3xl border shadow-sm">
-                <CardHeader><SectionTitle icon={Sparkles} title="市场博弈结构" subtitle="识别当前多空对冲的关键主线" /></CardHeader>
+                <CardHeader><SectionTitle icon={Sparkles} title="甯傚満鍗氬紙缁撴瀯" subtitle="璇嗗埆褰撳墠澶氱┖瀵瑰啿鐨勫叧閿富绾? /></CardHeader>
                 <CardContent>
                   <div className="rounded-2xl bg-purple-50 p-4 text-sm leading-6 text-purple-900">
                     {topRisk && topPositive ? (
                       <>
-                        <div>• 当前存在明显博弈：</div>
-                        <div>风险：{topRisk.label}</div>
-                        <div>对冲：{topPositive.label}</div>
-                        <div>• 关键判断：需观察哪一因素先兑现，将更大程度主导股价方向。</div>
+                        <div>鈥?褰撳墠瀛樺湪鏄庢樉鍗氬紙锛?/div>
+                        <div>椋庨櫓锛歿topRisk.label}</div>
+                        <div>瀵瑰啿锛歿topPositive.label}</div>
+                        <div>鈥?鍏抽敭鍒ゆ柇锛氶渶瑙傚療鍝竴鍥犵礌鍏堝厬鐜帮紝灏嗘洿澶х▼搴︿富瀵艰偂浠锋柟鍚戙€?/div>
                       </>
                     ) : (
-                      <div>当前暂无明显多空冲突结构。</div>
+                      <div>褰撳墠鏆傛棤鏄庢樉澶氱┖鍐茬獊缁撴瀯銆?/div>
                     )}
                   </div>
                 </CardContent>
@@ -1357,7 +1358,7 @@ export default function StockHighlightsPrototype() {
 
         <HighlightDialog item={activeHighlight} onClose={() => setActiveHighlight(null)} />
 
-        {/* 研究时光机抽屉 - v4.0 Final */}
+        {/* 鐮旂┒鏃跺厜鏈烘娊灞?- v4.0 Final */}
         <Dialog open={isSnapshotDrawerOpen} onOpenChange={setIsSnapshotDrawerOpen}>
           <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-white/95 backdrop-blur-xl">
             <DialogHeader>
@@ -1365,10 +1366,10 @@ export default function StockHighlightsPrototype() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-500 text-white shadow-lg">
                   <History size={20} />
                 </div>
-                <span>研究时光机</span>
+                <span>鐮旂┒鏃跺厜鏈?/span>
               </DialogTitle>
               <DialogDescription className="text-sm font-medium text-slate-500 mt-2">
-                对比不同研究阶段的情报镜像，捕捉基本面核心因子的量化演变。
+                瀵规瘮涓嶅悓鐮旂┒闃舵鐨勬儏鎶ラ暅鍍忥紝鎹曟崏鍩烘湰闈㈡牳蹇冨洜瀛愮殑閲忓寲婕斿彉銆?
               </DialogDescription>
             </DialogHeader>
             <div className="mt-6 space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -1378,7 +1379,7 @@ export default function StockHighlightsPrototype() {
                     <Clock3 className="h-8 w-8 text-slate-200" />
                   </div>
                   <div className="text-xs font-bold uppercase tracking-widest mb-1">NO_HISTORICAL_RECORD</div>
-                  <p className="text-xs">点击下方按钮保存当前情报作为历史基准点</p>
+                  <p className="text-xs">鐐瑰嚮涓嬫柟鎸夐挳淇濆瓨褰撳墠鎯呮姤浣滀负鍘嗗彶鍩哄噯鐐?/p>
                 </div>
               ) : (
                 snapshots.map((snap) => (
@@ -1418,7 +1419,7 @@ export default function StockHighlightsPrototype() {
             <div className="mt-8 flex gap-3">
                <Button className="flex-1 rounded-2xl h-12 text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xl" onClick={handleSaveSnapshot} disabled={isSavingSnapshot}>
                  {isSavingSnapshot ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Clock3 className="h-4 w-4 mr-2" />}
-                 记录当前最新镜像
+                 璁板綍褰撳墠鏈€鏂伴暅鍍?
                </Button>
             </div>
           </DialogContent>
