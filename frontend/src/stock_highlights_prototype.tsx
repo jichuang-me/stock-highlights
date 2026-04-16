@@ -43,12 +43,7 @@ import {
   Radar,
 } from 'recharts';
 
-const API_BASE_URL = (import.meta as any)?.env?.VITE_API_BASE_URL || 
-  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8001'
-    : (window.location.hostname.includes('github.io') 
-        ? 'https://jichuang123-stock-backend.hf.space' // 最终固化 jichuang123 的后端
-        : window.location.origin)); 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
 
 type SearchStock = {
   code: string;
