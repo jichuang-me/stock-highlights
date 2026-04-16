@@ -1,31 +1,24 @@
-# --- 阶段 1: 前端构建 ---
-FROM node:20 AS frontend-builder
-WORKDIR /web
-# 复制 package 文件并安装依赖
-COPY frontend/package*.json ./
-RUN npm install
-# 复制源码并执行编译 (Vite 默认产出到 dist 目录)
-COPY frontend/ .
-RUN npm run build
-
-# --- 阶段 2: 后端运行 ---
+# 使用轻量级 Python 镜像
 FROM python:3.10-slim
+
+# 设置工作目录
 WORKDIR /app
 
-# 安装 Python 依赖
-COPY backend/requirements.txt .
+# 安装必要的系统库（如果有需要）
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制依赖定义
+COPY hf_deploy/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制后端源码
-COPY backend/ .
+# 复制整个模块化后端
+COPY hf_deploy/ .
 
-# 将阶段 1 编译好的静态文件 (dist) 拷贝到后端目录中
-# 这样 app.py 里的 StaticFiles 就能找到并托管它
-COPY --from=frontend-builder /web/dist ./dist
-
-# Hugging Face Spaces 默认环境变量
+# 设置环境变量
 ENV PORT=7860
 ENV PYTHONUNBUFFERED=1
 
-# 启动全栈服务
+# 启动模块化入口 (app.py)
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
