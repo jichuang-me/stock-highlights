@@ -258,7 +258,7 @@ def fetch_xueqiu_hotness(code: str) -> Dict:
 def health():
     return {"status": "ok", "source": "v4.1_stable"}
 
-@app.get("/api/stocks/search")
+@app.get("/api/search")
 def search_stock(q: str = Query(...)):
     q = q.strip()
     if not q: return []
@@ -285,7 +285,7 @@ def search_stock(q: str = Query(...)):
         return results
     except: return []
 
-@app.get("/api/stocks/{code}/highlights")
+@app.get("/api/highlights")
 def get_highlights(code: str):
     with ThreadPoolExecutor(max_workers=5) as executor:
         f_ann = executor.submit(fetch_announcements, code)
