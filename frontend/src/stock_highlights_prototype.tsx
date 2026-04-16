@@ -141,6 +141,8 @@ type StockViewModel = {
   industry: string;
   marketImpression: string;
   headline: string;
+  price?: number;
+  pctChange?: number;
   summary: Summary;
   outlook: Outlook;
   highlights: HighlightItem[];
