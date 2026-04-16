@@ -20,6 +20,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src", "stock_highlights_prototype.tsx"],
+  "include": ["src", "components", "lib", "index.html"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
