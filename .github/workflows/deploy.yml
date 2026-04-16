@@ -18,17 +18,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          # 减少对 package-lock 强校验的依赖，确保即便环境波动也能 install
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: '**/package*.json'
 
       - name: Install dependencies
         run: |
           cd frontend
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Build
         run: |
           cd frontend
+          # 注入生产环境后端地址，确保前端构建后能正确指向 HF
+          export VITE_API_BASE_URL=https://jichuang123-stock-backend.hf.space
           npm run build
 
       - name: Deploy to GitHub Pages
