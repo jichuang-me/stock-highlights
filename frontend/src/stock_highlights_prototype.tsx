@@ -889,54 +889,43 @@ export default function StockHighlightsPrototype() {
         ) : (
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
             <div className="space-y-6">
-              <div className="rounded-2xl bg-blue-50 p-4">
-                <div className="text-sm font-semibold text-blue-800">投研洞察逻辑</div>
-                <div className="mt-2 space-y-2 text-sm text-blue-900">
-                  <div>• 风险敞口：{stockState.data.summary.totalRiskScore > stockState.data.summary.totalPositiveScore ? '当前系统探测到风险因子密集且权重较高，建议优先排查。' : '当前风险端保持在基准线水平，未出现显著扩散信号。'}</div>
-                  <div>• 边际变化：{stockState.data.summary.riskCount > 0 ? '需结合公告时效性，观察是否有风险因子的缓和或解除。' : '暂无显著负面信号。'}</div>
-                </div>
-              </div>
-
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border bg-white p-5 shadow-sm md:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-bold tracking-tight">{stockState.data.name}</h2>
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 animate-pulse">
-                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] font-bold text-emerald-600 font-mono">LIVE_{stockState.data.summary.lastUpdate || 'SYNCING'}</span>
+              {/* v2.2.9: 核心市场印象/快照 (Prominent Recovery) */}
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border bg-slate-900 p-6 text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10"><Zap size={80} /></div>
+                <div className="relative z-10">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-3xl font-black tracking-tight">{stockState.data.name}</h2>
+                      <span className="font-mono text-slate-400 font-bold">{stockState.data.code}</span>
+                      <div className="flex items-center gap-3 ml-4 border-l border-slate-700 pl-4">
+                        <span className="text-2xl font-black font-mono text-white">{stockState.data.price?.toLocaleString()}</span>
+                        <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${(stockState.data.pctChange || 0) >= 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/20 text-emerald-500'}`}>
+                          {(stockState.data.pctChange || 0) >= 0 ? '+' : ''}{stockState.data.pctChange?.toFixed(2)}%
+                        </span>
                       </div>
                     </div>
-                    <Badge variant="outline" className="rounded-full shadow-sm">{stockState.data.code}</Badge>
-                    <Badge variant="outline" className="rounded-full bg-slate-50 text-[10px] text-slate-400 border-slate-100 font-mono">v2.2.6_STABLE</Badge>
-                    <Badge variant="secondary" className="rounded-full">{stockState.data.industry}</Badge>
+                    <Badge variant="outline" className="border-slate-700 text-slate-400 font-mono tracking-widest text-[9px] uppercase">
+                      INTELLIGENCE_LAYER_v2.2.9_FINAL
+                    </Badge>
                   </div>
-                  {stockState.data.xueqiu && (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={`rounded-full border-none px-3 py-1 font-bold ${stockState.data.xueqiu.sentiment === 'bullish' ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-                        {stockState.data.xueqiu.sentiment === 'bullish' ? '🔥 看多情绪高涨' : '🧊 情绪回归冷静'}
-                      </Badge>
-                      <Badge variant="outline" className="rounded-full bg-slate-900 font-mono text-[10px] text-white">
-                        POP_RANK: {stockState.data.xueqiu.popularity}
-                      </Badge>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-widest">
+                      <Sparkles size={14} /> Market Impression / 市场印象
                     </div>
-                  )}
-                </div>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 font-medium">{stockState.data.marketImpression}</p>
-                <div className="mt-5 rounded-2xl bg-slate-900 p-4 text-white md:p-5 shadow-inner">
-                  <div className="flex items-center gap-2 text-sm text-slate-400 font-mono"><Sparkles className="h-4 w-4" /> CROSS_SOURCE_INSIGHT</div>
-                  <div className="mt-2 text-lg font-bold leading-tight">{stockState.data.headline}</div>
-                  {stockState.data.xueqiu && (
-                    <div className="mt-3 border-t border-slate-800 pt-3 text-xs leading-5 text-slate-400">
-                      热度解读：当前该股拥有 {stockState.data.xueqiu.followers.toLocaleString()} 位关注者，全网热度排名位居 {stockState.data.xueqiu.rank}。
+                    <p className="text-lg font-medium leading-relaxed text-slate-100">
+                      {stockState.data.marketImpression}
+                    </p>
+                    <div className="flex items-center gap-6 pt-2">
+                       <div className="text-xs text-slate-400"><span className="font-bold text-white tracking-widest uppercase">Sentiment:</span> {stockState.data.summary.sentiment === 'bullish' ? '🔥 看多' : '🧊 中性/看空'}</div>
+                       <div className="text-xs text-slate-400"><span className="font-bold text-white tracking-widest uppercase">Popularity:</span> No.{stockState.data.xueqiu?.rank || 'N/A'}</div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </motion.div>
 
               <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
                 <Card className="rounded-3xl border shadow-sm">
-                  <CardHeader><SectionTitle icon={BarChart3} title="情报趋势" subtitle="风险与亮点因子的时序强度演变" /></CardHeader>
+                  <CardHeader><SectionTitle icon={BarChart3} title="情报趋势" /></CardHeader>
                   <CardContent className="h-[280px] p-4">
                     <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                       <LineChart data={stockState.data.trend || []}>
@@ -968,7 +957,7 @@ export default function StockHighlightsPrototype() {
               <Card className="rounded-3xl border shadow-sm">
                 <CardHeader>
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <SectionTitle icon={FileText} title="核心看点卡片" subtitle="每条看点都包含结论、原因、证据和历史变化" />
+                    <SectionTitle icon={FileText} title="核心看点卡片" />
                     <div className="flex items-center gap-2 text-sm text-slate-500"><Filter className="h-4 w-4" /> 当前共 {filteredHighlights.length} 条</div>
                   </div>
                 </CardHeader>
@@ -1033,7 +1022,7 @@ export default function StockHighlightsPrototype() {
               </Card>
 
               <Card className="rounded-3xl border shadow-sm">
-                <CardHeader><SectionTitle icon={History} title="边际驱动分析" subtitle="深度解析近期分值波动的关键推手" /></CardHeader>
+                <CardHeader><SectionTitle icon={History} title="边际驱动分析" /></CardHeader>
                 <CardContent>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl bg-red-50 p-4 border border-red-100">
@@ -1075,7 +1064,7 @@ export default function StockHighlightsPrototype() {
               </Card>
 
               <Card className="rounded-3xl border shadow-sm">
-                <CardHeader><SectionTitle icon={TrendingUp} title="未来预期" subtitle="帮助理解后续 1-3 个月的关注重点" /></CardHeader>
+                <CardHeader><SectionTitle icon={TrendingUp} title="未来预期" /></CardHeader>
                 <CardContent>
                   {/* 2.2.0 新增：实时情报仪表盘 */}
         <div className="mb-6 grid gap-6 md:grid-cols-4">
@@ -1103,7 +1092,7 @@ export default function StockHighlightsPrototype() {
           <Card className="col-span-3 rounded-3xl border shadow-sm overflow-hidden">
             <CardHeader className="py-3 bg-slate-50 border-b">
               <div className="flex items-center justify-between">
-                <SectionTitle icon={Zap} title="7x24 情报闪电流" subtitle="基于全量快讯流的实时语义过滤" />
+                <SectionTitle icon={Zap} title="7x24 情报闪电流" />
                 <div className="flex items-center gap-2">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">实时情报扫描中</span>

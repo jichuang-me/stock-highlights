@@ -352,6 +352,11 @@ def get_highlights(code: str):
         raw_ann = future_ann.result()
         indicators = future_ind.result()
         xueqiu = future_pop.result()
+    
+    # 注入实时行情 (v2.2.9)
+    prefix = "sh" if code.startswith("6") else "sz"
+    if code.startswith("4") or code.startswith("8"): prefix = "bj"
+    price_info = fetch_sina_prices(f"{prefix}{code}").get(code, {"price": 0.0, "pct": 0.0})
 
     if not raw_ann:
         raise HTTPException(status_code=404, detail="未检索到公告证据")
@@ -441,12 +446,14 @@ def get_highlights(code: str):
             "sentiment": xueqiu.get("sentiment", "neutral"),
             "lastUpdate": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         },
-        "marketImpression": f"v2.2.5 实时引擎：新浪7x24及雪球热度已就绪。监控到 {total_risk} 项风险及 {total_pos} 项价值亮点。榜单排名：{xueqiu.get('rank', '探测中')}",
-        "headline": f"{company_name}：实时情报透视终端 2.2.0",
+        "marketImpression": f"市场综合情绪：{xueqiu.get('sentiment', '中性')}。全网关注排名第 {xueqiu.get('rank', 'N/A')}，当前行情反映了{ '偏正面' if price_info.get('pct', 0) > 0 else '偏负面' }的市场共识。包含 {total_risk} 项隐忧及 {total_pos} 项价值增长点。",
+        "price": price_info.get("price", 0.0),
+        "pctChange": price_info.get("pct", 0.0),
+        "headline": f"{company_name} ({code})",
         "outlook": {
             "consensus": xueqiu.get("sentiment", "neutral"), 
             "shortTerm": f"PE({indicators.get('pe', '-')}) ROE({indicators.get('roe', '-')})", 
-            "valuation": "资金博弈中"
+            "valuation": f"最新价: {price_info.get('price', '-')}"
         },
         "highlights": highlights,
         "liveNews": live_news,
