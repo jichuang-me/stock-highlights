@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ExternalLink,
   Loader2,
+  Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './components/ui/dialog';
@@ -118,30 +119,16 @@ type StockResponse = {
   radar?: Array<{ k: string; v: number }>;
   xueqiu?: {
     popularity: number;
+    followers: number;
+    rank: string;
     sentiment: string;
-    opinion: string;
-    analysis: string;
-    timestamp: string;
   };
-};
-
-type SnapshotPoint = {
-  snapshotDate: string;
-  riskScore: number;
-  positiveScore: number;
-  headline?: string;
   liveNews?: {
     title: string;
     time: string;
     url: string;
     source: string;
   }[];
-  xueqiu?: {
-    popularity: number;
-    followers: number;
-    rank: string;
-    sentiment: string;
-  };
 };
 
 type StockViewModel = {
@@ -157,10 +144,23 @@ type StockViewModel = {
   trend: Array<{ date: string; risk: number; positive: number }>;
   xueqiu?: {
     popularity: number;
+    followers: number;
+    rank: string;
     sentiment: string;
-    opinion: string;
-    analysis: string;
   };
+  liveNews?: {
+    title: string;
+    time: string;
+    url: string;
+    source: string;
+  }[];
+};
+
+type SnapshotPoint = {
+  snapshotDate: string;
+  riskScore: number;
+  positiveScore: number;
+  headline?: string;
 };
 
 async function apiRequest<T>(path: string): Promise<T> {
@@ -918,9 +918,9 @@ export default function StockHighlightsPrototype() {
                 <div className="mt-5 rounded-2xl bg-slate-900 p-4 text-white md:p-5 shadow-inner">
                   <div className="flex items-center gap-2 text-sm text-slate-400 font-mono"><Sparkles className="h-4 w-4" /> CROSS_SOURCE_INSIGHT</div>
                   <div className="mt-2 text-lg font-bold leading-tight">{stockState.data.headline}</div>
-                  {stockState.data.xueqiu?.analysis && (
+                  {stockState.data.xueqiu && (
                     <div className="mt-3 border-t border-slate-800 pt-3 text-xs leading-5 text-slate-400">
-                      分析官点评：{stockState.data.xueqiu.analysis}
+                      热度解读：当前该股拥有 {stockState.data.xueqiu.followers.toLocaleString()} 位关注者，全网热度排名位居 {stockState.data.xueqiu.rank}。
                     </div>
                   )}
                 </div>
@@ -1102,7 +1102,7 @@ export default function StockHighlightsPrototype() {
             <CardContent className="p-0">
               <div className="max-h-[140px] overflow-y-auto overscroll-contain scrollbar-hide">
                 {stockState.data.liveNews && stockState.data.liveNews.length > 0 ? (
-                  stockState.data.liveNews.map((news, i) => (
+                  stockState.data.liveNews.map((news: any, i: number) => (
                     <a 
                       key={i} 
                       href={news.url} 
