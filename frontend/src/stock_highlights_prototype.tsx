@@ -63,6 +63,7 @@ type Summary = {
   totalRiskScore: number;
   totalPositiveScore: number;
   lastUpdate?: string;
+  sentiment?: string;
 };
 
 type Outlook = {
@@ -115,6 +116,8 @@ type StockResponse = {
   summary: Summary;
   marketImpression: string;
   headline: string;
+  price?: number;
+  pctChange?: number;
   outlook: Outlook;
   highlights: HighlightItem[];
   radar?: Array<{ k: string; v: number }>;
