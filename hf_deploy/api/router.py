@@ -18,7 +18,7 @@ async def health():
 
 @router.get("/stocks/search", response_model=List[SearchStock])
 async def search(q: str = Query(..., min_length=1)):
-    return search_stock_enhanced(q)
+    return await search_stock_enhanced(q)
 
 @router.get("/stocks/{code}/highlights", response_model=HighlightsResponse)
 async def get_highlights_v2(code: str):

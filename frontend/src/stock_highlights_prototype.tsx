@@ -622,24 +622,68 @@ export default function StockHighlightsPrototype() {
         </header>
 
         {isQuickSearching && (
-          <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/40 pt-[15vh] backdrop-blur-md" onClick={() => setIsQuickSearching(false)}>
-            <div className="w-full max-w-xl overflow-hidden rounded-3xl border bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="relative border-b p-4">
-                <Search className="absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                <input autoFocus className="w-full bg-transparent pl-10 pr-10 text-xl outline-none" placeholder="搜索代码、简称..." value={quickSearchInput} onChange={e => setQuickSearchInput(e.target.value)} />
-              </div>
-              <div className="max-h-[460px] overflow-y-auto p-2">
-                {searchResults.map((item, idx) => (
-                  <div key={item.code} onClick={() => selectStock(item)} className={`flex cursor-pointer items-center justify-between rounded-2xl p-4 ${idx === selectedIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl bg-slate-900 px-2 py-1 text-xs font-bold text-white tracking-widest leading-none">{item.code}</div>
-                      <div className="font-bold text-slate-900">{item.name}</div>
+          <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24 px-4 bg-black/60 backdrop-blur-sm" onClick={() => setIsQuickSearching(false)}>
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.1, ease: 'easeOut' }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
+                  <Search className="w-5 h-5 text-zinc-500" />
+                  <input
+                    autoFocus
+                    ref={(el) => el && el.focus()}
+                    className="bg-transparent border-none outline-none text-white text-lg w-full placeholder:text-zinc-600"
+                    placeholder="输入代码、拼音或简称..."
+                    value={quickSearchInput}
+                    onChange={e => setQuickSearchInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowDown') setSelectedIndex(prev => Math.min(prev + 1, searchResults.length - 1));
+                      if (e.key === 'ArrowUp') setSelectedIndex(prev => Math.max(prev - 1, 0));
+                      if (e.key === 'Enter' && searchResults[selectedIndex]) selectStock(searchResults[selectedIndex]);
+                      if (e.key === 'Escape') setIsQuickSearching(false);
+                    }}
+                  />
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto p-2">
+                  {isSearching && (
+                    <div className="flex items-center justify-center p-8 text-zinc-500">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                      搜索中...
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-300" />
-                  </div>
-                ))}
-              </div>
-            </div>
+                  )}
+                  {!isSearching && searchResults.length === 0 && quickSearchInput.trim() !== '' && (
+                    <div className="p-8 text-center text-zinc-500 italic">未找到匹配的股票</div>
+                  )}
+                  {searchResults.map((item, idx) => (
+                    <div 
+                      key={item.code} 
+                      onClick={() => selectStock(item)} 
+                      className={`flex cursor-pointer items-center justify-between rounded-xl p-4 transition ${idx === selectedIndex ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-800/50'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-lg bg-white/10 px-2 py-1 text-xs font-mono font-bold text-white tracking-widest">{item.code}</div>
+                        <div className="font-bold">{item.name}</div>
+                        <div className="text-xs text-zinc-600">{item.industry}</div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="font-mono font-bold leading-none">{item.price?.toFixed(2)}</div>
+                          <div className={`text-[10px] font-bold ${(item.pct || 0) >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                            {(item.pct || 0) >= 0 ? '+' : ''}{item.pct?.toFixed(2)}%
+                          </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 opacity-20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         )}
 

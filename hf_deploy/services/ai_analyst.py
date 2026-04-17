@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, List, Optional
 from huggingface_hub import AsyncInferenceClient
 
-from ..core.config import HF_TOKEN, AI_MODEL_POOL, DASHSCOPE_API_KEY
+from ..core.config import HF_TOKEN, AI_MODEL_POOL, DASHSCOPE_API_KEY, DEEPSEEK_API_KEY
 from ..models.api_models import HighlightItem, Evidence, StockOutlook, MarketImpression
 
 # 系统提示词 (核心中枢)
@@ -162,6 +162,50 @@ async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[
         logging.warning(f"HF Direct ({model}) failed ({type(e).__name__}): {e}")
         return None
 
+async def call_deepseek_reasoner(model: str, user_input: str) -> Optional[Dict[str, Any]]:
+    """通过官方接口调用 DeepSeek R1 (Reasoner)"""
+    if not DEEPSEEK_API_KEY:
+        return None
+    
+    url = "https://api.deepseek.com/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+    payload = {
+        "model": model, 
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_input}
+        ],
+        "response_format": {"type": "json_object"} if model != "deepseek-reasoner" else None,
+        "temperature": 0.6 if model == "deepseek-reasoner" else 0.1
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload, timeout=90) as resp:
+                if resp.status != 200:
+                    err_msg = await resp.text()
+                    logging.warning(f"DeepSeek {model} returned {resp.status}: {err_msg}")
+                    return None
+                data = await resp.json()
+                choice = data['choices'][0]['message']
+                
+                # 特色处理：如果存在思维链，记录到日志中
+                if 'reasoning_content' in choice:
+                    logging.info(f"DeepSeek R1 Thinking: {choice['reasoning_content'][:500]}...")
+                
+                content = choice['content']
+                # 强力提取 JSON
+                match = re.search(r'\{.*\}', content, re.DOTALL)
+                if match:
+                    return json.loads(match.group())
+                return json.loads(content)
+    except Exception as e:
+        logging.warning(f"DeepSeek {model} failed ({type(e).__name__}): {e}")
+        return None
+
 async def generate_advanced_highlights(
     code: str,
     name: str,
@@ -184,18 +228,20 @@ async def generate_advanced_highlights(
     user_input = f"请针对以下数据进行深度分析：\n{json.dumps(context, ensure_ascii=False, indent=2)}"
 
     # 按优先级遍历模型池
-    for entry in AI_MODEL_POOL:
-        vendor = entry["vendor"]
-        model = entry["model"]
+    for attempt in AI_MODEL_POOL:
+        vendor = attempt['vendor']
+        model = attempt['model']
         
         logging.info(f"Attempting AI analysis for {code} using {vendor}:{model}")
         
         result = None
-        if vendor == "dashscope":
+        if vendor == 'deepseek':
+            result = await call_deepseek_reasoner(model, user_input)
+        elif vendor == 'dashscope':
             result = await call_dashscope(model, user_input)
-        elif vendor == "huggingface":
+        elif vendor == 'huggingface':
             result = await call_huggingface(model, user_input)
-        elif vendor == "huggingface_direct":
+        elif vendor == 'huggingface_direct':
             result = await call_huggingface_direct(model, user_input)
             
         if result and "highlights" in result:

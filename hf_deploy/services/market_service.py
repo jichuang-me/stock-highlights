@@ -1,13 +1,68 @@
+import aiohttp
 import logging
+import asyncio
 from functools import lru_cache
 from typing import Any, Dict
-
-import requests
 
 try:
     from ..core.config import REQUEST_TIMEOUT, USER_AGENT, XQ_SESSION
 except ImportError:
     from core.config import REQUEST_TIMEOUT, USER_AGENT, XQ_SESSION
+
+# --- Async Fetchers ---
+
+async def fetch_sina_prices_async(codes: str) -> Dict[str, Any]:
+    """异步抓取新浪实时价格"""
+    if not codes:
+        return {}
+
+    url = f"https://hq.sinajs.cn/list={codes}"
+    headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": USER_AGENT}
+    results: Dict[str, Any] = {}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                if resp.status != 200:
+                    return {}
+                content = await resp.read()
+                text = content.decode("gbk", errors="ignore")
+                for line in text.splitlines():
+                    if "=" not in line:
+                        continue
+                    code_num = "".join(filter(str.isdigit, line.split("=")[0].split("_")[-1]))
+                    data = line.split("=")[1].replace('"', "").split(",")
+                    if len(data) <= 4:
+                        continue
+                    try:
+                        price = float(data[3])
+                        pre_close = float(data[2])
+                    except (TypeError, ValueError):
+                        continue
+                    pct = round((price - pre_close) / pre_close * 100, 2) if pre_close > 0 else 0.0
+                    results[code_num] = {"price": price, "pct": pct}
+    except Exception as exc:
+        logging.error("Async Sina price fetch failed: %s", exc)
+    return results
+
+async def fetch_eastmoney_indicators_async(code: str) -> Dict[str, Any]:
+    """异步抓取东财核心指标"""
+    market = "1" if code.startswith("6") else "0"
+    url = f"http://push2.eastmoney.com/api/qt/stock/get?secid={market}.{code}&fields=f162,f167,f117,f58"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                data = await resp.json()
+                d = data.get("data") or {}
+                return {
+                    "name": d.get("f58", "加载中..."),
+                    "pe": d.get("f162", "-"),
+                    "pb": d.get("f167", "-"),
+                    "roe": d.get("f117", "-"),
+                }
+    except Exception as exc:
+        logging.error("Async Eastmoney fetch failed for %s: %s", code, exc)
+        return {"name": "加载中...", "pe": "-", "pb": "-", "roe": "-"}
 
 
 @lru_cache(maxsize=128)

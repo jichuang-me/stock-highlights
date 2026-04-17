@@ -17,20 +17,22 @@ CORS_ALLOW_ORIGINS = [
     if origin.strip()
 ]
 
-# AI 模型配置
+# AI 密钥配置 (从环境变量读取)
 HF_TOKEN = os.getenv("HF_TOKEN")
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 # AI 模型优先级池 (Vendor, Model ID, Priority)
-# 厂商支持: dashscope (OpenAI 兼容), huggingface (Router), huggingface_direct (Inference API)
+# 厂商支持: deepseek (官方), dashscope (OpenAI 兼容), huggingface (Router), huggingface_direct (Inference API)
 AI_MODEL_POOL = [
+    {"vendor": "deepseek", "model": "deepseek-reasoner", "priority": 0},
     {"vendor": "dashscope", "model": "qwen-plus", "priority": 1},
     {"vendor": "dashscope", "model": "qwen-max", "priority": 2},
     {"vendor": "huggingface_direct", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 3},
     {"vendor": "huggingface", "model": "meta-llama/Llama-3.3-70B-Instruct", "priority": 4},
 ]
 
-DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "qwen-plus")
+DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "deepseek-reasoner")
 
 
 XQ_SESSION = requests.Session()
