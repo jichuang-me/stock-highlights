@@ -1,16 +1,13 @@
 import json
 import logging
+import aiohttp
 from typing import Any, Dict, List, Optional
 from huggingface_hub import AsyncInferenceClient
 
-from ..core.config import HF_TOKEN, DEFAULT_AI_MODEL
+from ..core.config import HF_TOKEN, AI_MODEL_POOL, DASHSCOPE_API_KEY
 from ..models.api_models import HighlightItem, Evidence, StockOutlook, MarketImpression
 
-# 如果没有配置 Token，我们将记录警告并进入降级逻辑
-client = None
-if HF_TOKEN:
-    client = AsyncInferenceClient(model=DEFAULT_AI_MODEL, token=HF_TOKEN)
-
+# 系统提示词 (核心中枢)
 SYSTEM_PROMPT = """
 你是一名顶级券商的高级策略分析师，擅长从琐碎的金融数据中洞察核心博弈逻辑。
 你的任务是根据提供的股票原始数据（财务指标、最新电报内容、巨潮公告标题），生成一份比 iFinD Agent 更深度、更具洞察力的研判卡片。
@@ -43,12 +40,60 @@ SYSTEM_PROMPT = """
     "valuation": "估值中枢变动预期及驱动因素"
   }
 }
-
-要求：
-1. 见解深刻：不要只是复述数据，要分析其背后的业务逻辑或博弈心理。
-2. 严谨性：如果数据支持不足，请在 interpretation 中注明观察中。
-3. 语境适配：确保使用专业的中国金融市场术语。
 """
+
+async def call_huggingface(model: str, user_input: str) -> Optional[Dict[str, Any]]:
+    """调用 Hugging Face Inference API"""
+    if not HF_TOKEN:
+        return None
+    try:
+        client = AsyncInferenceClient(model=model, token=HF_TOKEN)
+        response = await client.post(
+            json={
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_input}
+                ],
+                "response_format": {"type": "json_object"}
+            }
+        )
+        return json.loads(response.decode("utf-8"))
+    except Exception as e:
+        logging.warning(f"HF Model {model} failed: {e}")
+        return None
+
+async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]]:
+    """通过 OpenAI 兼容接口调用阿里云 DashScope"""
+    if not DASHSCOPE_API_KEY:
+        return None
+    
+    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DASHSCOPE_API_KEY}"
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_input}
+        ],
+        "response_format": {"type": "json_object"}
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload, timeout=15) as resp:
+                if resp.status != 200:
+                    err_msg = await resp.text()
+                    logging.warning(f"DashScope {model} returned {resp.status}: {err_msg}")
+                    return None
+                data = await resp.json()
+                content = data['choices'][0]['message']['content']
+                return json.loads(content)
+    except Exception as e:
+        logging.warning(f"DashScope {model} failed: {e}")
+        return None
 
 async def generate_advanced_highlights(
     code: str,
@@ -59,12 +104,8 @@ async def generate_advanced_highlights(
     hotness: Dict[str, Any],
     price_info: Dict[str, Any]
 ) -> Optional[Dict[str, Any]]:
-    """调用大模型生成全量研判内容"""
-    if not client:
-        logging.warning("HF_TOKEN missing, falling back to rule-based analysis")
-        return None
-
-    # 聚合上下文（限制条数防止 Token 过载）
+    """核心入口：多模型轮换调用逻辑"""
+    
     context = {
         "stock": {"code": code, "name": name},
         "indicators": indicators,
@@ -73,33 +114,29 @@ async def generate_advanced_highlights(
         "market_sentiment": hotness,
         "current_price": price_info
     }
-
     user_input = f"请针对以下数据进行深度分析：\n{json.dumps(context, ensure_ascii=False, indent=2)}"
 
-    try:
-        response = await client.post(
-            json={
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_input}
-                ],
-                "response_format": {"type": "json_object"}
-            }
-        )
+    # 按优先级遍历模型池
+    for entry in AI_MODEL_POOL:
+        vendor = entry["vendor"]
+        model = entry["model"]
         
-        # 尝试解析并返回
-        result = json.loads(response.decode("utf-8"))
-        if not result or "highlights" not in result:
-             return None
-             
-        return result
-    except Exception as exc:
-        logging.error(f"AI analysis failed for {code}: {exc}")
-        return None
+        logging.info(f"Attempting AI analysis for {code} using {vendor}:{model}")
+        
+        result = None
+        if vendor == "dashscope":
+            result = await call_dashscope(model, user_input)
+        elif vendor == "huggingface":
+            result = await call_huggingface(model, user_input)
+            
+        if result and "highlights" in result:
+            logging.info(f"Successfully generated highlights for {code} using {vendor}:{model}")
+            return result
+            
+    logging.error(f"All AI models exhausted for {code}. Falling back to rules.")
+    return None
 
 def fallback_to_rules(raw_ann: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """旧有的规则引擎降级逻辑，确保基础可用"""
-    # 暂时封装一个符合新结构的空对象或基础对象
     return {
         "marketImpression": {
             "summary": "AI 分析暂时不可用，进入基础模式",
@@ -107,7 +144,7 @@ def fallback_to_rules(raw_ann: List[Dict[str, Any]]) -> Dict[str, Any]:
             "attention": "数据采集中"
         },
         "headline": "基础分析模式已启动",
-        "highlights": [], # 这里可以挂之前的 rule-based 结果
+        "highlights": [],
         "outlook": {
             "consensus": "暂无预期数据",
             "shortTerm": "等待观察",

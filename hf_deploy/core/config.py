@@ -19,8 +19,19 @@ CORS_ALLOW_ORIGINS = [
 
 # AI 模型配置
 HF_TOKEN = os.getenv("HF_TOKEN")
-# 默认使用 Qwen 2.5 72B，它是目前最强且支持免费 API 的中文模型之一
-DEFAULT_AI_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+
+# AI 模型优先级池 (Vendor, Model ID, Priority)
+# 厂商支持: dashscope (OpenAI 兼容), huggingface
+AI_MODEL_POOL = [
+    {"vendor": "dashscope", "model": "qwen-plus", "priority": 1},
+    {"vendor": "dashscope", "model": "qwen-max", "priority": 2},
+    {"vendor": "huggingface", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 3},
+    {"vendor": "huggingface", "model": "Qwen/Qwen2.5-7B-Instruct", "priority": 4},
+    {"vendor": "huggingface", "model": "Qwen/Qwen2.5-1.5B-Instruct", "priority": 5},
+]
+
+DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "Qwen/Qwen2.5-7B-Instruct")
 
 
 XQ_SESSION = requests.Session()
