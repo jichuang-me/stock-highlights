@@ -436,6 +436,16 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
   );
 }
 
+// --- Safe Storage Utility to prevent crashes in restricted browsers ---
+const safeLocalStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch { /* ignore if blocked */ }
+  }
+};
+
 export default function StockHighlightsPrototype() {
   const [stockState, setStockState] = useState<{
     data: StockViewModel | null;
@@ -444,9 +454,12 @@ export default function StockHighlightsPrototype() {
     error: string;
   }>({ data: null, history: [], loading: false, error: '' });
 
-  const [selectedCode, setSelectedCode] = useState(() => localStorage.getItem('last_stock_code') || '');
+  const [selectedCode, setSelectedCode] = useState(() => safeLocalStorage.getItem('last_stock_code') || '');
   const [recentStocks, setRecentStocks] = useState<SearchStock[]>(() => {
-    try { return JSON.parse(localStorage.getItem('recent_stocks') || '[]'); } catch { return []; }
+    try { 
+      const stored = safeLocalStorage.getItem('recent_stocks');
+      return stored ? JSON.parse(stored) : []; 
+    } catch { return []; }
   });
   
   const [sideFilter, setSideFilter] = useState('all');
@@ -581,10 +594,10 @@ export default function StockHighlightsPrototype() {
 
   const selectStock = (stock: SearchStock) => {
     setSelectedCode(stock.code);
-    localStorage.setItem('last_stock_code', stock.code);
+    safeLocalStorage.setItem('last_stock_code', stock.code);
     const updated = [stock, ...recentStocks.filter(s => s.code !== stock.code)].slice(0, 6);
     setRecentStocks(updated);
-    localStorage.setItem('recent_stocks', JSON.stringify(updated));
+    safeLocalStorage.setItem('recent_stocks', JSON.stringify(updated));
     setIsQuickSearching(false);
   };
 

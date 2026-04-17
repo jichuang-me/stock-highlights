@@ -32,10 +32,35 @@ app.add_middleware(
 
 app.include_router(router)
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+# ... (rest of imports)
+
+# ... (app initialization)
+
 # Mount frontend static files
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    # Check if the requested path is an API call
+    if full_path.startswith("api/"):
+        return {"error": "Not Found"}
+    
+    # Check if the requested file exists in dist
+    file_path = os.path.join(frontend_path, full_path)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    # Default: Serve index.html for SPA routing
+    index_file = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"error": "Frontend not built"}
+
+# We no longer need app.mount("/") because serve_frontend handles it with higher reliability
 
 
 
