@@ -64,7 +64,7 @@ async def call_huggingface(model: str, user_input: str) -> Optional[Dict[str, An
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=25) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=35) as resp:
                 if resp.status != 200:
                     err_msg = await resp.text()
                     logging.warning(f"HF Router ({model}) returned {resp.status}: {err_msg}")
@@ -97,7 +97,7 @@ async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=15) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=45) as resp:
                 if resp.status != 200:
                     err_msg = await resp.text()
                     logging.warning(f"DashScope {model} returned {resp.status}: {err_msg}")
