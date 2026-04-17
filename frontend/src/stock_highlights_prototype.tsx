@@ -245,27 +245,27 @@ function cnDelta(text?: string) {
 function getLatestHistoryBadge(item?: { history?: HistoryItem[] }) {
   const latest = item?.history?.[item.history.length - 1]?.action || item?.history?.[0]?.action || '';
   const map: Record<string, { label: string; className: string }> = {
-    鏂板: { label: '鏂板', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-    鍗囩骇: { label: '鍗囩骇', className: 'bg-red-50 text-red-700 border-red-200' },
-    寮哄寲: { label: '寮哄寲', className: 'bg-orange-50 text-orange-700 border-orange-200' },
-    缁存寔楂樹綅: { label: '楂樹綅', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-    缂撳拰: { label: '缂撳拰', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    宸茶В闄? { label: '宸茶В闄?, className: 'bg-slate-100 text-slate-700 border-slate-200' },
+    '新增': { label: '新增', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+    '升级': { label: '升级', className: 'bg-red-50 text-red-700 border-red-200' },
+    '强化': { label: '强化', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+    '维持高位': { label: '高位', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+    '缓和': { label: '缓和', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    '已解除': { label: '已解除', className: 'bg-slate-100 text-slate-700 border-slate-200' },
   };
   return map[latest] || null;
 }
 
 function buildWhyTree(item?: HighlightItem | null) {
   if (!item) return [];
-  const latestAction = item.history?.[item.history.length - 1]?.action || item.history?.[0]?.action || '鏂板';
-  const firstEvidence = item.evidence?.[0]?.title || '鍏紑鎶湶淇℃伅';
-  const firstFactor = item.factors?.[0] || '鍏抽敭褰卞搷鍥犵礌';
+  const latestAction = item.history?.[item.history.length - 1]?.action || item.history?.[0]?.action || '新增';
+  const firstEvidence = item.evidence?.[0]?.title || '公开披露信息';
+  const firstFactor = item.factors?.[0] || '关键影响因素';
   return [
-    `瑙﹀彂浜嬩欢锛?{firstEvidence}`,
-    `璇嗗埆淇″彿锛?{firstFactor}`,
-    `鐘舵€佸彉鍖栵細${latestAction}`,
-    `绯荤粺鍒ゆ柇锛?{item.label}`,
-    `褰卞搷缁撹锛?{item.interpretation}`,
+    `触发事件：${firstEvidence}`,
+    `识别信号：${firstFactor}`,
+    `状态变化：${latestAction}`,
+    `系统判断：${item.label}`,
+    `影响结论：${item.interpretation}`,
   ];
 }
 
@@ -280,17 +280,17 @@ function getSourceClass(source?: string) {
 
 function sortEvidence(evidence: EvidenceItem[] = []) {
   const sourceRank: Record<string, number> = {
-    鍏徃鍏憡: 5,
-    骞村害鎶ュ憡: 4,
-    璐㈡姤鏁版嵁: 4,
-    璐㈠姟鎸囨爣: 4,
-    '娉曢櫌/鐩戠': 3,
-    琛屼笟瑙傚療: 2,
-    涓氬姟鍔ㄦ€? 2,
-    甯傚満瑙傚療: 1,
-    缁煎悎鍒ゆ柇: 1,
+    '公司公告': 5,
+    '年度报告': 4,
+    '财报数据': 4,
+    '财务指标': 4,
+    '法院/监管': 3,
+    '行业观察': 2,
+    '业务动态': 2,
+    '市场观察': 1,
+    '综合判断': 1,
   };
-  const weightRank: Record<string, number> = { 楂? 3, 涓? 2, 浣? 1 };
+  const weightRank: Record<string, number> = { '高': 3, '中': 2, '低': 1 };
   return [...evidence].sort((a, b) => {
     const sourceDiff = (sourceRank[b.source] || 0) - (sourceRank[a.source] || 0);
     if (sourceDiff !== 0) return sourceDiff;
