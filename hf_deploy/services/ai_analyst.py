@@ -109,6 +109,45 @@ async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]
         logging.warning(f"DashScope {model} failed: {e}")
         return None
 
+async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[str, Any]]:
+    """直接调用 Hugging Face Inference API (绕过 Router，适配极新模型)"""
+    if not HF_TOKEN:
+        return None
+    
+    url = f"https://api-inference.huggingface.co/models/{model}"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {HF_TOKEN}"
+    }
+    # 对于直连 API，我们使用模型原生的 chat 格式
+    payload = {
+        "inputs": f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n",
+        "parameters": {
+            "return_full_text": False,
+            "max_new_tokens": 4096,
+            "temperature": 0.1
+        }
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload, timeout=50) as resp:
+                if resp.status != 200:
+                    err_msg = await resp.text()
+                    logging.warning(f"HF Direct ({model}) returned {resp.status}: {err_msg}")
+                    return None
+                
+                # 直连 API 返回的是列表格式 [{ "generated_text": "..." }]
+                data = await resp.json()
+                content = data[0]['generated_text'] if isinstance(data, list) else data.get('generated_text', '')
+                
+                # 清洗输出（移除可能残留的标记）
+                content = content.replace("```json", "").replace("```", "").strip()
+                return json.loads(content)
+    except Exception as e:
+        logging.warning(f"HF Direct ({model}) failed: {e}")
+        return None
+
 async def generate_advanced_highlights(
     code: str,
     name: str,
@@ -118,7 +157,7 @@ async def generate_advanced_highlights(
     hotness: Dict[str, Any],
     price_info: Dict[str, Any]
 ) -> Optional[Dict[str, Any]]:
-    """核心入口：多模型轮换调用逻辑"""
+    """核心入口：双轨制多模型轮换调用逻辑"""
     
     context = {
         "stock": {"code": code, "name": name},
@@ -142,6 +181,8 @@ async def generate_advanced_highlights(
             result = await call_dashscope(model, user_input)
         elif vendor == "huggingface":
             result = await call_huggingface(model, user_input)
+        elif vendor == "huggingface_direct":
+            result = await call_huggingface_direct(model, user_input)
             
         if result and "highlights" in result:
             logging.info(f"Successfully generated highlights for {code} using {vendor}:{model}")

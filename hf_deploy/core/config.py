@@ -22,12 +22,12 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 
 # AI 模型优先级池 (Vendor, Model ID, Priority)
-# 厂商支持: dashscope (OpenAI 兼容), huggingface
+# 厂商支持: dashscope (OpenAI 兼容), huggingface (Router), huggingface_direct (Inference API)
 AI_MODEL_POOL = [
     {"vendor": "dashscope", "model": "qwen3.6-plus", "priority": 1},
     {"vendor": "dashscope", "model": "qwen3.6-max", "priority": 2},
-    {"vendor": "huggingface", "model": "Qwen/Qwen3.6-35B-A3B", "priority": 3},
-    {"vendor": "huggingface", "model": "meta-llama/Llama-3.1-70B-Instruct", "priority": 4},
+    {"vendor": "huggingface_direct", "model": "Qwen/Qwen3.6-35B-A3B", "priority": 3},
+    {"vendor": "huggingface", "model": "meta-llama/Llama-3.3-70B-Instruct", "priority": 4},
     {"vendor": "huggingface", "model": "meta-llama/Llama-3.2-3B-Instruct", "priority": 5},
 ]
 
