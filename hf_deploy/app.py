@@ -2,6 +2,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 try:
     from .api.router import router
     from .core.config import CORS_ALLOW_ORIGINS, PORT
@@ -21,6 +24,11 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+# Mount frontend static files
+frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 
 @app.get("/")
