@@ -4,12 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stock Highlights - Financial Intel</title>
+    <style>
+      .app-loading-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: sans-serif;
+        color: #666;
+      }
+      .app-loading-content {
+        text-align: center;
+      }
+      .app-loading-title {
+        margin-bottom: 12px;
+        font-weight: 600;
+      }
+      .app-loading-subtitle {
+        font-size: 14px;
+        opacity: 0.7;
+      }
+    </style>
   </head>
   <body>
-    <div id="root" style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; color: #666;">
-      <div style="text-align: center;">
-        <div style="margin-bottom: 12px; font-weight: 600;">金融智能终端加载中...</div>
-        <div style="font-size: 14px; opacity: 0.7;">正在连接 AI 智策引擎</div>
+    <div id="root" class="app-loading-container">
+      <div class="app-loading-content">
+        <div class="app-loading-title">金融智能终端加载中...</div>
+        <div class="app-loading-subtitle">正在连接 AI 智策引擎</div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
