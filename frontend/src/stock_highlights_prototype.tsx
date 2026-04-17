@@ -223,23 +223,23 @@ const sideStyle = {
     badge: 'bg-red-50 text-red-700 border-red-200',
     chip: 'bg-red-50 text-red-700',
     icon: AlertTriangle,
-    label: '椋庨櫓',
+    label: '风险',
   },
   positive: {
     badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     chip: 'bg-emerald-50 text-emerald-700',
     icon: Sparkles,
-    label: '浜偣',
+    label: '亮点',
   },
 } as const;
 
 function scoreToStars(n: number) {
-  return '鈽?.repeat(Math.max(0, n)) + '鈽?.repeat(Math.max(0, 5 - n));
+  return '★'.repeat(Math.max(0, n)) + '☆'.repeat(Math.max(0, 5 - n));
 }
 
 function cnDelta(text?: string) {
-  if (!text) return '鏆傛棤';
-  return text.startsWith('+') ? `涓婂崌 ${text}` : text;
+  if (!text) return '暂无';
+  return text.startsWith('+') ? `上升 ${text}` : text;
 }
 
 function getLatestHistoryBadge(item?: { history?: HistoryItem[] }) {
@@ -270,11 +270,11 @@ function buildWhyTree(item?: HighlightItem | null) {
 }
 
 function getSourceClass(source?: string) {
-  if (source === '鍏徃鍏憡') return 'bg-blue-50 text-blue-700 border-blue-200';
-  if (source === '骞村害鎶ュ憡' || source === '璐㈡姤鏁版嵁' || source === '璐㈠姟鎸囨爣') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-  if (source === '娉曢櫌/鐩戠') return 'bg-red-50 text-red-700 border-red-200';
-  if (source === '琛屼笟瑙傚療' || source === '涓氬姟鍔ㄦ€?) return 'bg-amber-50 text-amber-700 border-amber-200';
-  if (source === '甯傚満瑙傚療') return 'bg-slate-100 text-slate-700 border-slate-200';
+  if (source === '公司公告') return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (source === '年度报告' || source === '财报数据' || source === '财务指标') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+  if (source === '法院/监管') return 'bg-red-50 text-red-700 border-red-200';
+  if (source === '行业观察' || source === '业务动态') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (source === '市场观察') return 'bg-slate-100 text-slate-700 border-slate-200';
   return 'bg-violet-50 text-violet-700 border-violet-200';
 }
 
@@ -301,11 +301,11 @@ function sortEvidence(evidence: EvidenceItem[] = []) {
 function getDefaultRadarFromSummary(summary?: Summary) {
   if (!summary) return [];
   return [
-    { k: '椋庨櫓寮哄害', v: summary.totalRiskScore || 0 },
-    { k: '浜偣寮哄害', v: summary.totalPositiveScore || 0 },
-    { k: '椋庨櫓鏁伴噺', v: Math.min((summary.riskCount || 0) * 18, 100) },
-    { k: '浜偣鏁伴噺', v: Math.min((summary.positiveCount || 0) * 18, 100) },
-    { k: '鍙俊搴?, v: summary.confidence || 0 },
+    { k: '风险强度', v: summary.totalRiskScore || 0 },
+    { k: '亮点强度', v: summary.totalPositiveScore || 0 },
+    { k: '风险数量', v: Math.min((summary.riskCount || 0) * 18, 100) },
+    { k: '亮点数量', v: Math.min((summary.positiveCount || 0) * 18, 100) },
+    { k: '可信度', v: summary.confidence || 0 },
   ];
 }
 
@@ -367,7 +367,7 @@ function HighlightCard({
     >
       <div className="mb-3 flex items-center justify-end">
         <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => onOpen(item)}>
-          鏌ョ湅璇︽儏
+          查看详情
         </Button>
       </div>
 
@@ -523,7 +523,7 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
               </div>
 
               <div>
-                <div className="mb-3 text-sm font-semibold">瀹屾暣鍘嗗彶鏃堕棿绾?/div>
+                <div className="mb-3 text-sm font-semibold">完整历史时间线</div>
                 <div className="space-y-3">
                   {(item.history || []).map((h, idx) => (
                     <div key={`${h.date}-${idx}`} className="flex items-start gap-3 rounded-2xl border p-4">
