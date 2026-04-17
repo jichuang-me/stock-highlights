@@ -26,12 +26,12 @@ DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 AI_MODEL_POOL = [
     {"vendor": "dashscope", "model": "qwen3.6-plus", "priority": 1},
     {"vendor": "dashscope", "model": "qwen3.6-max", "priority": 2},
-    {"vendor": "huggingface_direct", "model": "Qwen/Qwen3.6-35B-A3B", "priority": 3},
+    {"vendor": "huggingface_direct", "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", "priority": 3},
     {"vendor": "huggingface", "model": "meta-llama/Llama-3.3-70B-Instruct", "priority": 4},
     {"vendor": "huggingface", "model": "meta-llama/Llama-3.2-3B-Instruct", "priority": 5},
 ]
 
-DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "Qwen/Qwen3.6-35B-A3B")
+DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
 
 
 XQ_SESSION = requests.Session()

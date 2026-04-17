@@ -1,6 +1,7 @@
 import json
 import logging
 import aiohttp
+import re
 from typing import Any, Dict, List, Optional
 from huggingface_hub import AsyncInferenceClient
 
@@ -110,7 +111,7 @@ async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]
         return None
 
 async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[str, Any]]:
-    """直接调用 Hugging Face Inference API (绕过 Router，适配极新模型)"""
+    """直接调用 Hugging Face Inference API (具备思维链剥离与 JSON 强力提取能力)"""
     if not HF_TOKEN:
         return None
     
@@ -119,9 +120,9 @@ async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[
         "Content-Type": "application/json",
         "Authorization": f"Bearer {HF_TOKEN}"
     }
-    # 对于直连 API，我们使用模型原生的 chat 格式
+    # 针对 R1-Distill 优化 Prompt：明确指令模型在“非思考模式”下必须以纯 JSON 结尾
     payload = {
-        "inputs": f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n",
+        "inputs": f"<|im_start|>system\n{SYSTEM_PROMPT}\n注意：输出必须是合法的 JSON，不要返回任何 Markdown 标记或多余文字。<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n",
         "parameters": {
             "return_full_text": False,
             "max_new_tokens": 4096,
@@ -141,8 +142,21 @@ async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[
                 data = await resp.json()
                 content = data[0]['generated_text'] if isinstance(data, list) else data.get('generated_text', '')
                 
-                # 清洗输出（移除可能残留的标记）
+                # 核心处理：剥离 DeepSeek 的 <think> 模块
+                content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+                
+                # 清洗输出（移除 Markdown 代码块标记）
                 content = content.replace("```json", "").replace("```", "").strip()
+                
+                # 强力提取：由于 R1 可能在 JSON 前后输出额外文字，使用正则定位 JSON 核
+                match = re.search(r'\{.*\}', content, re.DOTALL)
+                if match:
+                    json_str = match.group()
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        logging.error(f"Failed to decode regex-extracted JSON for {model}")
+                
                 return json.loads(content)
     except Exception as e:
         logging.warning(f"HF Direct ({model}) failed: {e}")
