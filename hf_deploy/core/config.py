@@ -29,6 +29,7 @@ AI_MODEL_POOL = [
     {"vendor": "huggingface", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 3},
     {"vendor": "huggingface", "model": "Qwen/Qwen2.5-7B-Instruct", "priority": 4},
     {"vendor": "huggingface", "model": "Qwen/Qwen2.5-1.5B-Instruct", "priority": 5},
+    {"vendor": "huggingface", "model": "meta-llama/Llama-3.2-3B-Instruct", "priority": 6},
 ]
 
 DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "Qwen/Qwen2.5-7B-Instruct")

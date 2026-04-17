@@ -43,23 +43,37 @@ SYSTEM_PROMPT = """
 """
 
 async def call_huggingface(model: str, user_input: str) -> Optional[Dict[str, Any]]:
-    """调用 Hugging Face Inference API"""
+    """调用 Hugging Face Inference Router (OpenAI 兼容接口)"""
     if not HF_TOKEN:
         return None
+    
+    # 使用最新的路由器接口，避免直连模型 ID 导致的 404
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {HF_TOKEN}"
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_input}
+        ],
+        "response_format": {"type": "json_object"}
+    }
+    
     try:
-        client = AsyncInferenceClient(model=model, token=HF_TOKEN)
-        response = await client.post(
-            json={
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_input}
-                ],
-                "response_format": {"type": "json_object"}
-            }
-        )
-        return json.loads(response.decode("utf-8"))
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload, timeout=25) as resp:
+                if resp.status != 200:
+                    err_msg = await resp.text()
+                    logging.warning(f"HF Router ({model}) returned {resp.status}: {err_msg}")
+                    return None
+                data = await resp.json()
+                content = data['choices'][0]['message']['content']
+                return json.loads(content)
     except Exception as e:
-        logging.warning(f"HF Model {model} failed: {e}")
+        logging.warning(f"HF Router ({model}) failed: {e}")
         return None
 
 async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]]:
