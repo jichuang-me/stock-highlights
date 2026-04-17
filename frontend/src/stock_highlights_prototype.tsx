@@ -35,7 +35,7 @@ import {
 } from "./components/ui/accordion";
 
 // --- API Helper ---
-const API_BASE = window.location.origin;
+const API_BASE = ''; // Use relative paths for better stability on Hugging Face
 
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${url}`, options);
@@ -526,23 +526,36 @@ export default function StockHighlightsPrototype() {
           loading: false, error: '', history: histRes || [],
           data: {
             ...highlightsRes.stock,
-            marketImpression: highlightsRes.marketImpression,
-            headline: highlightsRes.headline,
-            summary: highlightsRes.summary,
-            outlook: highlightsRes.outlook,
+            marketImpression: highlightsRes.marketImpression || { 
+              summary: '暂无分析', 
+              positioning: '待研判', 
+              investor_focus: '保持关注' 
+            },
+            headline: highlightsRes.headline || '智能扫描中...',
+            summary: highlightsRes.summary || { 
+              totalRiskScore: 0, totalPositiveScore: 0, 
+              riskCount: 0, positiveCount: 0, 
+              sentiment: 'neutral', confidence: 0 
+            },
+            outlook: highlightsRes.outlook || { 
+              consensus: '观测中', 
+              shortTerm: '中性', 
+              valuation: '合理', 
+              catalysts: [] 
+            },
             highlights: highlightsRes.highlights || [],
-            radar: highlightsRes.radar?.length ? highlightsRes.radar : getDefaultRadarFromSummary(highlightsRes.summary),
-            trend: (highlightsRes.priceHistory || []).map((p: StockSnapshot) => ({
-              date: p.date.slice(5),
-              price: p.price,
-              risk: highlightsRes.summary.totalRiskScore,
-              positive: highlightsRes.summary.totalPositiveScore,
+            radar: (highlightsRes.radar && highlightsRes.radar.length > 0) ? highlightsRes.radar : getDefaultRadarFromSummary(highlightsRes.summary || {}),
+            trend: (highlightsRes.priceHistory || []).map((p: any) => ({
+              date: (p.date || '').slice(5),
+              price: p.price || 0,
+              risk: (highlightsRes.summary?.totalRiskScore) || 0,
+              positive: (highlightsRes.summary?.totalPositiveScore) || 0,
               isEvent: (histRes || []).some((h: any) => h.date === p.date)
             })),
-            price: highlightsRes.stock.price,
-            pctChange: highlightsRes.stock.pctChange,
-            xueqiu: highlightsRes.xueqiu,
-            liveNews: highlightsRes.liveNews
+            price: highlightsRes.stock?.price || 0,
+            pctChange: highlightsRes.stock?.pctChange || 0,
+            xueqiu: highlightsRes.xueqiu || { rank: 0, popularity: 0, followers: 0 },
+            liveNews: highlightsRes.liveNews || []
           }
         });
       } catch (err: any) { if (!ignore) setStockState({ data: null, history: [], loading: false, error: err?.message || '获取数据失败' }); }

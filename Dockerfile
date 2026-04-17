@@ -7,7 +7,6 @@ RUN npm install --legacy-peer-deps
 # 拷贝前端全量代码并构建
 COPY frontend/ ./
 # 注入环境变量（使用 Space 的公网地址）
-ENV VITE_API_BASE_URL=https://jichuang123-stock-backend.hf.space
 RUN npm run build
 
 # --- Stage 2: Backend Runtime stage
