@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+frontend/node_modules
+frontend/dist
+hf_deploy/__pycache__
+__pycache__
+*.pyc
+.env
+.venv
+venv
+dist

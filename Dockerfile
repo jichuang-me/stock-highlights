@@ -3,7 +3,7 @@ FROM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
 # 拷贝 package.json 并安装依赖
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 # 拷贝前端全量代码并构建
 COPY frontend/ ./
 # 注入环境变量（使用 Space 的公网地址）
