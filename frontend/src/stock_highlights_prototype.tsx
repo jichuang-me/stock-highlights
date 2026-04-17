@@ -437,12 +437,24 @@ function HighlightDialog({ item, onClose }: { item: HighlightItem | null; onClos
 }
 
 // --- Safe Storage Utility to prevent crashes in restricted browsers ---
+const memoryStorage: Record<string, string> = {};
+
 const safeLocalStorage = {
   getItem(key: string): string | null {
-    try { return localStorage.getItem(key); } catch { return null; }
+    try {
+      const val = localStorage.getItem(key);
+      return val !== null ? val : (memoryStorage[key] || null);
+    } catch {
+      return memoryStorage[key] || null;
+    }
   },
   setItem(key: string, value: string): void {
-    try { localStorage.setItem(key, value); } catch { /* ignore if blocked */ }
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      memoryStorage[key] = value;
+      console.warn('Storage blocked: Using memory fallback for', key);
+    }
   }
 };
 
