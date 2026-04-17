@@ -1,4 +1,4 @@
-﻿/// <reference types="vite/client" />
+/// <reference types="vite/client" />
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -106,6 +106,18 @@ type HighlightItem = {
   freshness?: string;
 };
 
+type MarketImpression = {
+  summary: string;
+  positioning: string;
+  attention: string;
+};
+
+type StockOutlook = {
+  consensus: string;
+  shortTerm: string;
+  valuation: string;
+};
+
 type StockResponse = {
   stock: {
     code: string;
@@ -113,11 +125,11 @@ type StockResponse = {
     industry?: string;
   };
   summary: Summary;
-  marketImpression: string;
+  marketImpression: MarketImpression;
   headline: string;
   price?: number;
   pctChange?: number;
-  outlook: Outlook;
+  outlook: StockOutlook;
   highlights: HighlightItem[];
   radar?: Array<{ k: string; v: number }>;
   xueqiu?: {
@@ -140,12 +152,12 @@ type StockViewModel = {
   code: string;
   name: string;
   industry: string;
-  marketImpression: string;
+  marketImpression: MarketImpression;
   headline: string;
   price?: number;
   pctChange?: number;
   summary: Summary;
-  outlook: Outlook;
+  outlook: StockOutlook;
   highlights: HighlightItem[];
   radar: Array<{ k: string; v: number }>;
   trend: Array<{ date: string; risk: number; positive: number; price?: number; isEvent?: boolean }>;
