@@ -1,6 +1,7 @@
 import aiohttp
 import logging
 import asyncio
+import requests
 from functools import lru_cache
 from typing import Any, Dict
 
@@ -63,6 +64,39 @@ async def fetch_eastmoney_indicators_async(code: str) -> Dict[str, Any]:
     except Exception as exc:
         logging.error("Async Eastmoney fetch failed for %s: %s", code, exc)
         return {"name": "加载中...", "pe": "-", "pb": "-", "roe": "-"}
+
+async def fetch_xueqiu_hotness_async(code: str) -> Dict[str, Any]:
+    """异步抓取雪球热度数据"""
+    symbol = f"SH{code}" if code.startswith("6") else f"SZ{code}"
+    url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol={symbol}&extend=detail"
+    
+    # 模拟浏览器 Cookie 策略，雪球通常需要预访问，但在简单 API 下可以尝试直连
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+        "Referer": "https://xueqiu.com/"
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 尝试获取一个基础 Cookie
+            async with session.get("https://xueqiu.com/", headers=headers, timeout=5):
+                async with session.get(url, headers=headers, timeout=5) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        quote = data.get("data", {}).get("quote", {})
+                        followers = quote.get("followers", 0)
+                        return {
+                            "popularity": 75 if followers > 10000 else 60,
+                            "followers": followers,
+                            "rank": f"关注 {followers:,}",
+                            "sentiment": "bullish" if followers > 50000 else "neutral",
+                        }
+    except Exception as exc:
+        logging.warning("Async Xueqiu hotness fetch failed: %s", exc)
+    
+    # 回退到默认值
+    return {"popularity": 65, "followers": 0, "rank": "关注数据暂不可用", "sentiment": "neutral"}
 
 
 @lru_cache(maxsize=128)

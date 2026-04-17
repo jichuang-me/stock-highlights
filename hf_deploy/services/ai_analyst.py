@@ -1,5 +1,6 @@
 import json
 import logging
+import asyncio
 import aiohttp
 import re
 from typing import Any, Dict, List, Optional
@@ -235,15 +236,29 @@ async def generate_advanced_highlights(
         
         logging.info(f"Attempting AI analysis for {code} using {vendor}:{model}")
         
-        result = None
+        result_awaitable = None
         if vendor == 'deepseek':
-            result = await call_deepseek_reasoner(model, user_input)
+            result_awaitable = call_deepseek_reasoner(model, user_input)
         elif vendor == 'dashscope':
-            result = await call_dashscope(model, user_input)
+            result_awaitable = call_dashscope(model, user_input)
         elif vendor == 'huggingface':
-            result = await call_huggingface(model, user_input)
+            result_awaitable = call_huggingface(model, user_input)
         elif vendor == 'huggingface_direct':
-            result = await call_huggingface_direct(model, user_input)
+            result_awaitable = call_huggingface_direct(model, user_input)
+            
+        if not result_awaitable:
+            continue
+
+        try:
+            # 针对首选顶级模型 (R1) 采用较短的“快闪”超时 (30s)，如果拥堵则快速切换
+            timeout_limit = 30 if attempt.get('priority') == 0 else 60
+            result = await asyncio.wait_for(result_awaitable, timeout=timeout_limit)
+        except asyncio.TimeoutError:
+            logging.warning(f"AI Model {vendor}:{model} timed out after {timeout_limit}s, skipping to next...")
+            continue
+        except Exception as e:
+            logging.warning(f"AI Model {vendor}:{model} failed: {e}")
+            continue
             
         if result and "highlights" in result:
             logging.info(f"Successfully generated highlights for {code} using {vendor}:{model}")
@@ -252,18 +267,36 @@ async def generate_advanced_highlights(
     logging.error(f"All AI models exhausted for {code}. Falling back to rules.")
     return None
 
-def fallback_to_rules(raw_ann: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def generate_rule_based_highlights(code: str, raw_ann: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """基础降级逻辑：在 AI 全部失效时由系统根据规则提取关键公告"""
+    # 提取前 3 条公告作为亮点草稿
+    basic_highlights = []
+    for i, ann in enumerate(raw_ann[:3]):
+        basic_highlights.append({
+            "id": f"rule-{i}",
+            "side": "positive" if "中标" in ann.get("announcementTitle", "") or "增长" in ann.get("announcementTitle", "") else "risk",
+            "label": ann.get("announcementTitle", "")[:12],
+            "score": 60,
+            "category": "公告回顾",
+            "why": f"该信号来自最近的公告：{ann.get('announcementTitle')}",
+            "interpretation": "基于系统规则提取，建议结合财报进一步确认。",
+            "game_view": "作为基础参考，主力资金通常会随公告热度进行短期博弈。",
+            "stars": 3,
+            "evidence": [{"source": "巨潮资讯", "title": ann.get("announcementTitle"), "time": ann.get("announcementTime")}]
+        })
+
     return {
         "marketImpression": {
-            "summary": "AI 分析暂时不可用，进入基础模式",
-            "positioning": "数据采集中",
-            "attention": "数据采集中"
+            "summary": "AI 研判模型当前负载过高，已启动规则引擎进行基础扫描。",
+            "positioning": "基础面扫描中",
+            "attention": "常规关注"
         },
-        "headline": "基础分析模式已启动",
-        "highlights": [],
+        "headline": f"股票 {code} 基础扫描完成 (AI 降级模式)",
+        "highlights": basic_highlights,
         "outlook": {
-            "consensus": "暂无预期数据",
-            "shortTerm": "等待观察",
+            "consensus": "观测中",
+            "shortTerm": "震荡观望",
             "valuation": "估值中枢稳定"
-        }
+        },
+        "summary": {"sentiment": "neutral", "confidence": 50}
     }

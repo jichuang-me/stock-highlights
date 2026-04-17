@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import Any, Dict, List
 
 import requests
+import aiohttp
 
 try:
     from ..core.config import CNINFO_DAYS_DEFAULT, REQUEST_TIMEOUT, USER_AGENT
@@ -52,6 +53,38 @@ def fetch_announcements(code: str, days: int = CNINFO_DAYS_DEFAULT) -> List[Dict
         return [item for item in data if item.get("secCode") == code]
     except Exception as exc:
         logging.error("Announcement fetch failed for %s: %s", code, exc)
+        return []
+
+async def fetch_announcements_async(code: str, days: int = CNINFO_DAYS_DEFAULT) -> List[Dict[str, Any]]:
+    """异步抓取巨潮公告"""
+    plate = "sh" if code.startswith("6") else "sz"
+    payload = {
+        "pageNum": 1,
+        "pageSize": 50,
+        "column": "szse",
+        "tabName": "fulltext",
+        "plate": plate,
+        "stock": "",
+        "searchkey": code,
+        "secid": "",
+        "category": "",
+        "trade": "",
+        "seDate": _date_range(days),
+    }
+    headers = {
+        "User-Agent": USER_AGENT,
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(CNINFO_QUERY_URL, data=payload, headers=headers, timeout=REQUEST_TIMEOUT) as resp:
+                if resp.status != 200:
+                    return []
+                data = await resp.json()
+                announcements = data.get("announcements") or []
+                return [item for item in announcements if item.get("secCode") == code]
+    except Exception as exc:
+        logging.error("Async Announcement fetch failed for %s: %s", code, exc)
         return []
 
 
