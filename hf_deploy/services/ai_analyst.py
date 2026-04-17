@@ -178,8 +178,8 @@ async def call_deepseek_reasoner(model: str, user_input: str) -> Optional[Dict[s
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_input}
         ],
-        "response_format": {"type": "json_object"} if model != "deepseek-reasoner" else None,
-        "temperature": 0.6 if model == "deepseek-reasoner" else 0.1
+        "response_format": {"type": "json_object"} if model == "deepseek-chat" else None,
+        "temperature": 0.6 if model == "deepseek-reasoner" else 0.2
     }
     
     try:
@@ -192,15 +192,16 @@ async def call_deepseek_reasoner(model: str, user_input: str) -> Optional[Dict[s
                 data = await resp.json()
                 choice = data['choices'][0]['message']
                 
-                # 特色处理：如果存在思维链，记录到日志中
+                # 特色处理：如果存在思维链 (仅 R1 有)，记录到日志中
                 if 'reasoning_content' in choice:
                     logging.info(f"DeepSeek R1 Thinking: {choice['reasoning_content'][:500]}...")
                 
                 content = choice['content']
-                # 强力提取 JSON
-                match = re.search(r'\{.*\}', content, re.DOTALL)
-                if match:
-                    return json.loads(match.group())
+                # 强力提取 JSON (应对 R1 或非 JSON Mode 的情况)
+                if model != "deepseek-chat":
+                    match = re.search(r'\{.*\}', content, re.DOTALL)
+                    if match:
+                        return json.loads(match.group())
                 return json.loads(content)
     except Exception as e:
         logging.warning(f"DeepSeek {model} failed ({type(e).__name__}): {e}")
