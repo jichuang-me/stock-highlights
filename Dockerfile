@@ -10,7 +10,7 @@ COPY frontend/ ./
 ENV VITE_API_BASE_URL=https://jichuang123-stock-backend.hf.space
 RUN npm run build
 
-# --- 第二阶段：后端运行 ---
+# --- Stage 2: Backend Runtime ---
 FROM python:3.9-slim
 WORKDIR /app
 
@@ -18,9 +18,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 拷贝后端代码
-COPY . .
-# 从第一阶段拷贝构建产物，覆盖本地可能为空或缺失的 dist 文件夹
+# 先复制后端代码（不包含大型前端源码）
+COPY hf_deploy/ ./hf_deploy/
+
+# 从第一阶段拷贝构建产物
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 ENV PYTHONPATH=/app
