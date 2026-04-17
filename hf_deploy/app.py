@@ -12,6 +12,13 @@ except ImportError:
     from api.router import router
     from core.config import CORS_ALLOW_ORIGINS, PORT
 
+import os
+import time
+
+# Enforce Timezone at Application Level
+os.environ['TZ'] = 'Asia/Shanghai'
+if hasattr(time, 'tzset'):
+    time.tzset()
 
 app = FastAPI(title="Stock Highlights API", version="4.4.0")
 

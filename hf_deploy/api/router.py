@@ -20,7 +20,11 @@ async def health():
 async def search(q: str = Query(..., min_length=1)):
     return search_stock_enhanced(q)
 
-@router.get("/highlights", response_model=HighlightsResponse)
+@router.get("/stocks/{code}/highlights", response_model=HighlightsResponse)
+async def get_highlights_v2(code: str):
+    return await get_highlights(code)
+
+@router.get("/highlights", response_model=HighlightsResponse, include_in_schema=False)
 async def get_highlights(code: str = Query(..., pattern="^\d{6}$")):
     # 1. 基础并行数据获取
     prefix = "sh" if code.startswith("6") else "sz"
@@ -82,3 +86,16 @@ async def get_highlights(code: str = Query(..., pattern="^\d{6}$")):
             {"k": "风险敞口", "v": min(len(risks) * 20, 100)}
         ]
     )
+
+@router.get("/stocks/{code}/history")
+async def get_stock_history(code: str):
+    # 返回空列表以防止前端崩溃，后续可对接真实数据库
+    return []
+
+@router.get("/stocks/{code}/snapshots")
+async def get_stock_snapshots(code: str):
+    return []
+
+@router.post("/stocks/{code}/snapshots")
+async def save_stock_snapshot(code: str, data: dict):
+    return {"status": "success", "id": "local_snap_001"}
