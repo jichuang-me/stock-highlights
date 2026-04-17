@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Query, HTTPException
+import asyncio
 from typing import List
 from ..models.api_models import SearchStock, HighlightsResponse, HighlightItem, StockSummary
 from ..services.search_service import search_stock_enhanced
