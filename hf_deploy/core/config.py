@@ -24,14 +24,13 @@ DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 # AI 模型优先级池 (Vendor, Model ID, Priority)
 # 厂商支持: dashscope (OpenAI 兼容), huggingface (Router), huggingface_direct (Inference API)
 AI_MODEL_POOL = [
-    {"vendor": "dashscope", "model": "qwen3.6-plus", "priority": 1},
-    {"vendor": "dashscope", "model": "qwen3.6-max", "priority": 2},
-    {"vendor": "huggingface_direct", "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", "priority": 3},
+    {"vendor": "dashscope", "model": "qwen-plus", "priority": 1},
+    {"vendor": "dashscope", "model": "qwen-max", "priority": 2},
+    {"vendor": "huggingface_direct", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 3},
     {"vendor": "huggingface", "model": "meta-llama/Llama-3.3-70B-Instruct", "priority": 4},
-    {"vendor": "huggingface", "model": "meta-llama/Llama-3.2-3B-Instruct", "priority": 5},
 ]
 
-DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "qwen-plus")
 
 
 XQ_SESSION = requests.Session()

@@ -98,7 +98,7 @@ async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=45) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
                 if resp.status != 200:
                     err_msg = await resp.text()
                     logging.warning(f"DashScope {model} returned {resp.status}: {err_msg}")
@@ -107,7 +107,7 @@ async def call_dashscope(model: str, user_input: str) -> Optional[Dict[str, Any]
                 content = data['choices'][0]['message']['content']
                 return json.loads(content)
     except Exception as e:
-        logging.warning(f"DashScope {model} failed: {e}")
+        logging.warning(f"DashScope {model} failed ({type(e).__name__}): {e}")
         return None
 
 async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[str, Any]]:
@@ -159,7 +159,7 @@ async def call_huggingface_direct(model: str, user_input: str) -> Optional[Dict[
                 
                 return json.loads(content)
     except Exception as e:
-        logging.warning(f"HF Direct ({model}) failed: {e}")
+        logging.warning(f"HF Direct ({model}) failed ({type(e).__name__}): {e}")
         return None
 
 async def generate_advanced_highlights(
