@@ -10,8 +10,14 @@ COPY frontend/ ./
 ENV VITE_API_BASE_URL=https://jichuang123-stock-backend.hf.space
 RUN npm run build
 
-# --- Stage 2: Backend Runtime ---
+# --- Stage 2: Backend Runtime stage
 FROM python:3.9-slim
+
+# Set timezone
+ENV TZ=Asia/Shanghai
+RUN apt-get update && apt-get install -y tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # 安装 python 依赖
