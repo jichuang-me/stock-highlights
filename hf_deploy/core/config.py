@@ -20,7 +20,7 @@ CORS_ALLOW_ORIGINS = [
 # AI 模型配置
 HF_TOKEN = os.getenv("HF_TOKEN")
 # 默认使用 Qwen 2.5 72B，它是目前最强且支持免费 API 的中文模型之一
-DEFAULT_AI_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_AI_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 
 
 XQ_SESSION = requests.Session()
