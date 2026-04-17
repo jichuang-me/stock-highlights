@@ -31,17 +31,9 @@ if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Stock Highlights API is ready.",
-        "endpoints": [
-            "/api/health",
-            "/api/stocks/search",
-            "/api/stocks/{code}/highlights",
-        ],
-    }
 
+# Health check endpoint moved to a non-conflicting path if needed, 
+# but router already has /api/health
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=PORT)
