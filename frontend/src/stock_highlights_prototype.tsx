@@ -323,6 +323,11 @@ export default function StockHighlightsPrototype() {
                                 <Bot className="mr-1 h-3.5 w-3.5" />
                                 AI 研判
                               </>
+                            ) : data.analysisPending ? (
+                              <>
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                AI 生成中
+                              </>
                             ) : (
                               <>
                                 <ShieldAlert className="mr-1 h-3.5 w-3.5" />
@@ -349,6 +354,11 @@ export default function StockHighlightsPrototype() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <p className="text-sm leading-6 text-slate-300">{data.marketImpression}</p>
+                      {data.analysisPending ? (
+                        <div className="text-xs text-cyan-300">
+                          已先返回规则结果，AI 总结生成后会自动刷新。
+                        </div>
+                      ) : null}
                       {data.analysisModel ? (
                         <div className="text-xs text-slate-500">模型来源：{data.analysisModel}</div>
                       ) : null}

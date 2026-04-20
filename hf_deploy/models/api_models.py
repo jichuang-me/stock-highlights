@@ -63,6 +63,7 @@ class HighlightsResponse(BaseModel):
     headline: Optional[str] = None
     marketImpression: str
     analysisMode: Literal["ai", "rules"] = "rules"
+    analysisPending: bool = False
     analysisModel: Optional[str] = None
     price: float
     pctChange: float

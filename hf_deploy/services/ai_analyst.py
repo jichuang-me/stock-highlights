@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +16,8 @@ except ImportError:
 
 AI_ANALYSIS_CACHE_TTL = 600
 _analysis_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_analysis_jobs: set[str] = set()
+_analysis_lock = threading.Lock()
 
 SYSTEM_PROMPT = """
 你是一名面向二级市场的中文股票研究助手。你的任务不是复述新闻，而是基于给定的行情、公告和快讯，
@@ -27,6 +30,10 @@ SYSTEM_PROMPT = """
   "sentiment": "positive | negative | neutral"
 }
 """
+
+
+def has_ai_provider() -> bool:
+    return bool(DEEPSEEK_API_KEY or DASHSCOPE_API_KEY or HF_TOKEN)
 
 
 def _cache_key(payload: Dict[str, Any]) -> str:
@@ -121,7 +128,7 @@ def _normalize_result(result: Dict[str, Any], vendor: str, model: str) -> Option
     }
 
 
-def generate_ai_summary(
+def _build_context(
     code: str,
     name: str,
     indicators: Dict[str, Any],
@@ -129,8 +136,8 @@ def generate_ai_summary(
     announcements: List[Dict[str, Any]],
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
-) -> Optional[Dict[str, Any]]:
-    context = {
+) -> Dict[str, Any]:
+    return {
         "stock": {"code": code, "name": name},
         "price": price_info,
         "hotness": {
@@ -142,30 +149,79 @@ def generate_ai_summary(
         "news": [item.get("title", "") for item in news[:6]],
     }
 
-    key = _cache_key(context)
-    cached = _analysis_cache.get(key)
-    now = time.time()
-    if cached and now - cached[0] < AI_ANALYSIS_CACHE_TTL:
-        return cached[1]
 
+def _run_ai_summary(key: str, context: Dict[str, Any]) -> None:
     user_input = (
         "请根据以下股票上下文生成总结，重点回答当前最值得关注的主线、风险或催化。\n"
         f"{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
 
-    for attempt in sorted(AI_MODEL_POOL, key=lambda item: item.get("priority", 99)):
-        vendor = attempt["vendor"]
-        model = attempt["model"]
-        try:
-            logging.info("Trying AI summary for %s with %s:%s", code, vendor, model)
-            raw = _call_model(vendor, model, user_input)
-            if not raw:
-                continue
-            result = _normalize_result(raw, vendor, model)
-            if result:
-                _analysis_cache[key] = (now, result)
-                return result
-        except Exception as exc:
-            logging.warning("AI summary failed for %s via %s:%s: %s", code, vendor, model, exc)
+    try:
+        for attempt in sorted(AI_MODEL_POOL, key=lambda item: item.get("priority", 99)):
+            vendor = attempt["vendor"]
+            model = attempt["model"]
+            try:
+                logging.info("Trying AI summary for %s with %s:%s", context["stock"]["code"], vendor, model)
+                raw = _call_model(vendor, model, user_input)
+                if not raw:
+                    continue
+                result = _normalize_result(raw, vendor, model)
+                if result:
+                    with _analysis_lock:
+                        _analysis_cache[key] = (time.time(), result)
+                    return
+            except Exception as exc:
+                logging.warning(
+                    "AI summary failed for %s via %s:%s: %s",
+                    context["stock"]["code"],
+                    vendor,
+                    model,
+                    exc,
+                )
+    finally:
+        with _analysis_lock:
+            _analysis_jobs.discard(key)
 
-    return None
+
+def get_cached_ai_summary(
+    code: str,
+    name: str,
+    indicators: Dict[str, Any],
+    news: List[Dict[str, Any]],
+    announcements: List[Dict[str, Any]],
+    hotness: Dict[str, Any],
+    price_info: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], str]:
+    context = _build_context(code, name, indicators, news, announcements, hotness, price_info)
+    key = _cache_key(context)
+
+    with _analysis_lock:
+        cached = _analysis_cache.get(key)
+        if cached and time.time() - cached[0] < AI_ANALYSIS_CACHE_TTL:
+            return cached[1], key
+
+    return None, key
+
+
+def queue_ai_summary(
+    key: str,
+    code: str,
+    name: str,
+    indicators: Dict[str, Any],
+    news: List[Dict[str, Any]],
+    announcements: List[Dict[str, Any]],
+    hotness: Dict[str, Any],
+    price_info: Dict[str, Any],
+) -> bool:
+    if not has_ai_provider():
+        return False
+
+    with _analysis_lock:
+        if key in _analysis_jobs:
+            return True
+        _analysis_jobs.add(key)
+
+    context = _build_context(code, name, indicators, news, announcements, hotness, price_info)
+    thread = threading.Thread(target=_run_ai_summary, args=(key, context), daemon=True)
+    thread.start()
+    return True

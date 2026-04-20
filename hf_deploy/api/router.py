@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query
 
 try:
     from ..models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
-    from ..services.ai_analyst import generate_ai_summary
+    from ..services.ai_analyst import get_cached_ai_summary, queue_ai_summary
     from ..services.announcement_service import fetch_announcements
     from ..services.highlight_engine import analyze_highlights
     from ..services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
@@ -13,7 +13,7 @@ try:
     from ..services.search_service import get_stock_profile, search_stock_enhanced
 except ImportError:
     from models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
-    from services.ai_analyst import generate_ai_summary
+    from services.ai_analyst import get_cached_ai_summary, queue_ai_summary
     from services.announcement_service import fetch_announcements
     from services.highlight_engine import analyze_highlights
     from services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
@@ -38,7 +38,7 @@ def _rule_sentiment(risk_count: int, positive_count: int) -> str:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.6.1"}
+    return {"status": "ok", "version": "v4.7.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -85,8 +85,14 @@ async def _build_highlights_response(code: str) -> HighlightsResponse:
     positives = [item for item in highlights if item["side"] == "positive"]
     sentiment = _rule_sentiment(len(risks), len(positives))
 
-    ai_summary = await asyncio.to_thread(
-        generate_ai_summary,
+    market_impression = _build_rule_market_impression(highlights, hotness, indicators)
+    headline = None
+    analysis_mode = "rules"
+    analysis_model = None
+    analysis_pending = False
+
+    ai_summary, cache_key = await asyncio.to_thread(
+        get_cached_ai_summary,
         code=code,
         name=company_name or code,
         indicators=indicators,
@@ -96,17 +102,24 @@ async def _build_highlights_response(code: str) -> HighlightsResponse:
         price_info=stock_price,
     )
 
-    market_impression = _build_rule_market_impression(highlights, hotness, indicators)
-    headline = None
-    analysis_mode = "rules"
-    analysis_model = None
-
     if ai_summary:
         market_impression = ai_summary["marketImpression"]
         headline = ai_summary["headline"]
         sentiment = ai_summary.get("sentiment", sentiment)
         analysis_mode = "ai"
         analysis_model = ai_summary.get("model")
+    else:
+        analysis_pending = await asyncio.to_thread(
+            queue_ai_summary,
+            cache_key,
+            code,
+            company_name or code,
+            indicators,
+            news,
+            raw_ann,
+            hotness,
+            stock_price,
+        )
 
     radar = [
         RadarPoint(k="人气", v=_clamp(float(hotness["popularity"]))),
@@ -126,6 +139,7 @@ async def _build_highlights_response(code: str) -> HighlightsResponse:
         headline=headline,
         marketImpression=market_impression,
         analysisMode=analysis_mode,
+        analysisPending=analysis_pending,
         analysisModel=analysis_model,
         price=float(stock_price["price"]),
         pctChange=float(stock_price["pct"]),

@@ -56,6 +56,7 @@ export type StockHighlightsResponse = {
   headline?: string | null;
   marketImpression: string;
   analysisMode: 'ai' | 'rules';
+  analysisPending: boolean;
   analysisModel?: string | null;
   price: number;
   pctChange: number;
