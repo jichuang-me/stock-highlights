@@ -645,6 +645,7 @@ export default function StockHighlightsPrototype() {
   const [watchlist, setWatchlist] = useState<SearchStock[]>([]);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [aiInsightOpen, setAiInsightOpen] = useState(false);
   const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(DEFAULT_MODEL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState(DEFAULT_MODEL_PROFILES[0].id);
 
@@ -972,7 +973,16 @@ export default function StockHighlightsPrototype() {
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-3">
                             <h2 className="text-3xl font-semibold">{displayStock.name}</h2>
+                            <div className="text-3xl font-semibold text-white">{data.price.toFixed(2)}</div>
                             <Badge className={priceBadgeClass(data.pctChange)}>{percentText(data.pctChange)}</Badge>
+                            <button
+                              type="button"
+                              aria-label={watched ? '移出自选' : '加入自选'}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-white/20 hover:text-white"
+                              onClick={toggleWatchlist}
+                            >
+                              <Star className={`h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
+                            </button>
                           </div>
                           <div className="text-sm text-slate-400">
                             {displayStock.code} · {displayStock.industry}
@@ -983,12 +993,14 @@ export default function StockHighlightsPrototype() {
                           <Badge className="border-white/10 bg-white/5 text-slate-200">
                             {sentimentLabel(data.summary.sentiment)}
                           </Badge>
-                          <Badge
-                            className={
+                          <button
+                            type="button"
+                            className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
                               data.analysisMode === 'ai'
                                 ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'
                                 : 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-                            }
+                            }`}
+                            onClick={() => setAiInsightOpen(true)}
                           >
                             {data.analysisMode === 'ai' ? (
                               <>
@@ -1006,7 +1018,7 @@ export default function StockHighlightsPrototype() {
                                 规则回退
                               </>
                             )}
-                          </Badge>
+                          </button>
                         </div>
                       </div>
 
@@ -1019,22 +1031,10 @@ export default function StockHighlightsPrototype() {
                           <p className="mt-3 text-sm leading-6 text-slate-200">{data.marketImpression}</p>
                         </div>
 
-                        <div className="grid gap-4">
-                          <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
-                            <div className="text-xs uppercase tracking-[0.22em] text-slate-500">实时价格</div>
-                            <div className="mt-3 flex items-end gap-3">
-                              <div className="text-4xl font-semibold text-white">{data.price.toFixed(2)}</div>
-                              <div className={`pb-1 text-lg font-medium ${priceTextClass(data.pctChange)}`}>
-                                {percentText(data.pctChange)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
-                            <div className="text-xs uppercase tracking-[0.22em] text-slate-500">情绪位置</div>
-                            <div className="mt-3 text-xl font-semibold text-white">{stageInfo?.title}</div>
-                            <p className="mt-2 text-sm leading-6 text-slate-300">{stageInfo?.description}</p>
-                          </div>
+                        <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
+                          <div className="text-xs uppercase tracking-[0.22em] text-slate-500">情绪位置</div>
+                          <div className="mt-3 text-xl font-semibold text-white">{stageInfo?.title}</div>
+                          <p className="mt-2 text-sm leading-6 text-slate-300">{stageInfo?.description}</p>
                         </div>
                       </div>
                     </CardHeader>
@@ -1098,47 +1098,6 @@ export default function StockHighlightsPrototype() {
                         </div>
                       </div>
 
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-5">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                          <div className="grid gap-3 text-sm text-slate-300 md:grid-cols-3 lg:flex-1">
-                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">模型配置</div>
-                              <div className="mt-2 font-medium text-white">
-                                {data.analysisProfileLabel || activeProfile.label}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">执行模型</div>
-                              <div className="mt-2 font-medium text-white">{data.analysisModel || '尚未返回'}</div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">最近更新</div>
-                              <div className="mt-2 font-medium text-white">{data.analysisUpdatedAt || '等待生成'}</div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-3">
-                            {data.analysisPending ? (
-                              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
-                                已先返回规则结果，AI 总结生成后会自动刷新。
-                              </div>
-                            ) : null}
-                            <Button className="rounded-2xl" onClick={() => void refreshAnalysis()} type="button">
-                              <RefreshCcw className="mr-2 h-4 w-4" />
-                              重算 AI
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="rounded-2xl border-white/10 bg-slate-950 text-slate-200 hover:bg-slate-900"
-                              onClick={toggleWatchlist}
-                            >
-                              <Star className={`mr-2 h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
-                              {watched ? '移出自选' : '加入自选'}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
                     </CardContent>
                   </Card>
 
@@ -1330,6 +1289,58 @@ export default function StockHighlightsPrototype() {
             <div>3. AI 要给判断，不是复读资讯。</div>
             <div>4. 模型可以切换，也可以添加你自己的 OpenAI 兼容端点。</div>
             <div>5. 如果使用本地模型，请提供当前 Hugging Face Space 可以访问到的地址，而不是电脑本机的 localhost。</div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={aiInsightOpen} onOpenChange={setAiInsightOpen}>
+        <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>AI 研判详情</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              模型配置、执行状态和重算入口都收在这里。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">模型配置</div>
+                <div className="mt-2 font-medium text-white">{data?.analysisProfileLabel || activeProfile.label}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">执行模型</div>
+                <div className="mt-2 font-medium text-white">{data?.analysisModel || '尚未返回'}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">最近更新</div>
+                <div className="mt-2 font-medium text-white">{data?.analysisUpdatedAt || '等待生成'}</div>
+              </div>
+            </div>
+
+            {data?.analysisPending ? (
+              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+                已先返回规则结果，AI 总结生成后会自动刷新。
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <Button className="rounded-2xl" onClick={() => void refreshAnalysis()} type="button">
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                重算 AI
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-2xl border-white/10 bg-slate-950 text-slate-200 hover:bg-slate-900"
+                onClick={() => {
+                  setAiInsightOpen(false);
+                  setModelDialogOpen(true);
+                }}
+              >
+                <Settings2 className="mr-2 h-4 w-4" />
+                切换模型
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
