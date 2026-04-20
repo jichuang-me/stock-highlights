@@ -19,21 +19,17 @@ CORS_ALLOW_ORIGINS = [
     if origin.strip()
 ]
 
-# AI keys from environment variables.
+# Built-in server models only use the Hugging Face Router token.
 HF_TOKEN = os.getenv("HF_TOKEN")
-DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-# AI model priority pool.
+# Default server-side model pool: free Hugging Face options only.
 AI_MODEL_POOL = [
-    {"vendor": "deepseek", "model": "deepseek-reasoner", "priority": 0},
-    {"vendor": "deepseek", "model": "deepseek-chat", "priority": 1},
-    {"vendor": "dashscope", "model": "qwen-plus", "priority": 2},
-    {"vendor": "dashscope", "model": "qwen-max", "priority": 3},
-    {"vendor": "huggingface", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 4},
+    {"vendor": "huggingface", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 0, "label": "HF Qwen2.5 72B"},
+    {"vendor": "huggingface", "model": "Qwen/Qwen3-32B", "priority": 1, "label": "HF Qwen3 32B"},
+    {"vendor": "huggingface", "model": "google/gemma-3-27b-it", "priority": 2, "label": "HF Gemma 3 27B"},
+    {"vendor": "huggingface", "model": "meta-llama/Llama-3.3-70B-Instruct", "priority": 3, "label": "HF Llama 3.3 70B"},
 ]
-
-DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "deepseek-reasoner")
+DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "Qwen/Qwen2.5-72B-Instruct")
 
 
 def _build_retry_session() -> requests.Session:

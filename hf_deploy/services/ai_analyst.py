@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Optional
 import requests
 
 try:
-    from ..core.config import AI_MODEL_POOL, DASHSCOPE_API_KEY, DEEPSEEK_API_KEY, HF_TOKEN, REQUEST_TIMEOUT
+    from ..core.config import AI_MODEL_POOL, HF_TOKEN, REQUEST_TIMEOUT
 except ImportError:
-    from core.config import AI_MODEL_POOL, DASHSCOPE_API_KEY, DEEPSEEK_API_KEY, HF_TOKEN, REQUEST_TIMEOUT
+    from core.config import AI_MODEL_POOL, HF_TOKEN, REQUEST_TIMEOUT
 
 
 AI_ANALYSIS_CACHE_TTL = 600
@@ -47,14 +47,11 @@ def has_ai_provider(profile: Optional[Dict[str, str]] = None) -> bool:
 
     if profile and profile.get("vendor"):
         vendor = profile["vendor"]
-        if vendor == "deepseek":
-            return bool(DEEPSEEK_API_KEY)
-        if vendor == "dashscope":
-            return bool(DASHSCOPE_API_KEY)
         if vendor == "huggingface":
             return bool(HF_TOKEN)
+        return False
 
-    return bool(DEEPSEEK_API_KEY or DASHSCOPE_API_KEY or HF_TOKEN)
+    return bool(HF_TOKEN and AI_MODEL_POOL)
 
 
 def _cache_key(payload: Dict[str, Any]) -> str:
@@ -106,22 +103,6 @@ def _call_openai_compatible(
 
 
 def _call_builtin_model(vendor: str, model: str, user_input: str) -> Optional[Dict[str, Any]]:
-    if vendor == "deepseek":
-        return _call_openai_compatible(
-            "https://api.deepseek.com/chat/completions",
-            model,
-            user_input,
-            DEEPSEEK_API_KEY or "",
-        )
-
-    if vendor == "dashscope":
-        return _call_openai_compatible(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-            model,
-            user_input,
-            DASHSCOPE_API_KEY or "",
-        )
-
     if vendor == "huggingface":
         return _call_openai_compatible(
             "https://router.huggingface.co/v1/chat/completions",

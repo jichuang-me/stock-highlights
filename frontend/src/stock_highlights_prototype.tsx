@@ -42,32 +42,66 @@ const ACTIVE_MODEL_PROFILE_KEY = 'stock-highlights:active-model-profile';
 const DEFAULT_MODEL_PROFILES: AnalysisProfile[] = [
   {
     id: 'server-auto',
-    label: '系统自动',
-    kind: 'api',
+    label: '系统免费池',
+    kind: 'free',
     mode: 'server',
     vendor: '',
     model: '',
-    note: '按服务器优先级自动选择可用模型。',
+    note: '按服务器优先级自动选择可用免费模型。',
   },
   {
-    id: 'server-deepseek',
-    label: 'DeepSeek 推理',
-    kind: 'api',
-    mode: 'server',
-    vendor: 'deepseek',
-    model: 'deepseek-reasoner',
-    note: '偏判断力，适合短线结论。',
-  },
-  {
-    id: 'server-hf-free',
-    label: 'HF 免费备选',
+    id: 'server-hf-qwen25',
+    label: 'HF Qwen2.5 72B',
     kind: 'free',
     mode: 'server',
     vendor: 'huggingface',
     model: 'Qwen/Qwen2.5-72B-Instruct',
-    note: '用服务端 Hugging Face Router 兜底。',
+    note: '中文理解稳，适合主线提炼。',
+  },
+  {
+    id: 'server-hf-qwen3',
+    label: 'HF Qwen3 32B',
+    kind: 'free',
+    mode: 'server',
+    vendor: 'huggingface',
+    model: 'Qwen/Qwen3-32B',
+    note: '速度更轻快，适合快速复盘。',
+  },
+  {
+    id: 'server-hf-gemma3',
+    label: 'HF Gemma 3 27B',
+    kind: 'free',
+    mode: 'server',
+    vendor: 'huggingface',
+    model: 'google/gemma-3-27b-it',
+    note: '风格稳，适合补充第二判断。',
+  },
+  {
+    id: 'server-hf-llama33',
+    label: 'HF Llama 3.3 70B',
+    kind: 'free',
+    mode: 'server',
+    vendor: 'huggingface',
+    model: 'meta-llama/Llama-3.3-70B-Instruct',
+    note: '通用能力强，适合交叉验证。',
   },
 ];
+
+const DEFAULT_MODEL_PROFILE_IDS = new Set(DEFAULT_MODEL_PROFILES.map((profile) => profile.id));
+
+function sanitizeSavedProfiles(profiles: AnalysisProfile[]) {
+  return profiles.filter((profile) => {
+    if (!profile || typeof profile !== 'object') {
+      return false;
+    }
+
+    if (profile.mode === 'server') {
+      return DEFAULT_MODEL_PROFILE_IDS.has(profile.id);
+    }
+
+    return Boolean(profile.id && profile.label && profile.model && profile.baseUrl);
+  });
+}
 
 const sideMeta = {
   risk: {
@@ -352,6 +386,14 @@ type FocusNewsLink = {
   score: number;
 };
 
+type VerificationSignal = {
+  tone: 'positive' | 'risk' | 'neutral';
+  label: string;
+  description: string;
+  news: StockHighlightsResponse['liveNews'][number];
+  linkedLabel: string;
+};
+
 function splitKeywordPhrases(value: string) {
   return value
     .split(/[，。；：、“”（）()\/\s\-·]+/)
@@ -414,6 +456,71 @@ function linkNewsToFocus(newsItems: StockHighlightsResponse['liveNews'], highlig
     risk: risk.slice(0, 3),
     neutral: neutral.slice(0, 3),
   };
+}
+
+function getVerificationSignals(linkedNews: ReturnType<typeof linkNewsToFocus>) {
+  const signals: VerificationSignal[] = [];
+
+  if (linkedNews.positive[0]) {
+    const item = linkedNews.positive[0];
+    signals.push({
+      tone: 'positive',
+      label: '强化主线',
+      description: item.linkedLabel
+        ? `这条消息继续强化“${item.linkedLabel}”这条主线。`
+        : '这条消息继续强化当前主线。',
+      news: item.news,
+      linkedLabel: item.linkedLabel,
+    });
+  }
+
+  if (linkedNews.risk[0]) {
+    const item = linkedNews.risk[0];
+    signals.push({
+      tone: 'risk',
+      label: '风险扰动',
+      description: item.linkedLabel
+        ? `这条消息说明“${item.linkedLabel}”相关风险正在扰动当前预期。`
+        : '这条消息正在扰动当前短线预期。',
+      news: item.news,
+      linkedLabel: item.linkedLabel,
+    });
+  }
+
+  if (linkedNews.neutral[0]) {
+    const item = linkedNews.neutral[0];
+    signals.push({
+      tone: 'neutral',
+      label: '待验证增量',
+      description: '这条消息暂时还没有直接挂上主线，但值得继续观察是否升级。',
+      news: item.news,
+      linkedLabel: '',
+    });
+  }
+
+  if (signals.length < 3) {
+    const extraPool = [...linkedNews.positive.slice(1), ...linkedNews.risk.slice(1), ...linkedNews.neutral.slice(1)];
+    extraPool.slice(0, 3 - signals.length).forEach((item) => {
+      signals.push({
+        tone: linkedNews.positive.includes(item) ? 'positive' : linkedNews.risk.includes(item) ? 'risk' : 'neutral',
+        label: linkedNews.positive.includes(item)
+          ? '继续强化'
+          : linkedNews.risk.includes(item)
+            ? '继续扰动'
+            : '补充观察',
+        description:
+          linkedNews.positive.includes(item) && item.linkedLabel
+            ? `继续补强“${item.linkedLabel}”这条线。`
+            : linkedNews.risk.includes(item) && item.linkedLabel
+              ? `继续观察“${item.linkedLabel}”相关扰动是否扩散。`
+              : '作为补充增量，继续看它是否升级为主线证据。',
+        news: item.news,
+        linkedLabel: item.linkedLabel,
+      });
+    });
+  }
+
+  return signals.slice(0, 3);
 }
 
 function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
@@ -828,13 +935,15 @@ export default function StockHighlightsPrototype() {
       if (rawProfiles) {
         const parsed = JSON.parse(rawProfiles) as AnalysisProfile[];
         if (Array.isArray(parsed)) {
-          const customProfiles = parsed.filter(
-            (profile) => !DEFAULT_MODEL_PROFILES.some((item) => item.id === profile.id),
-          );
+          const sanitizedProfiles = sanitizeSavedProfiles(parsed);
+          const customProfiles = sanitizedProfiles.filter((profile) => profile.mode === 'custom');
           const nextProfiles = [...DEFAULT_MODEL_PROFILES, ...customProfiles];
           setModelProfiles(nextProfiles);
+          window.localStorage.setItem(MODEL_PROFILES_KEY, JSON.stringify(nextProfiles));
           if (savedActiveProfile && nextProfiles.some((profile) => profile.id === savedActiveProfile)) {
             setActiveProfileId(savedActiveProfile);
+          } else {
+            window.localStorage.setItem(ACTIVE_MODEL_PROFILE_KEY, DEFAULT_MODEL_PROFILES[0].id);
           }
         }
       } else if (savedActiveProfile) {
@@ -906,10 +1015,17 @@ export default function StockHighlightsPrototype() {
     () => getChainSegment(primaryFocusHighlight, '后续验证'),
     [primaryFocusHighlight],
   );
+  const stageInfo = data ? getSentimentStage(data) : null;
+  const phaseInfo = data ? getShortlinePhase(data, sortedHighlights) : null;
+  const checklist = data ? getShortlineChecklist(data, sortedHighlights) : [];
+  const shortlineSignal = data ? getShortlineSignal(data, sortedHighlights) : null;
+  const invalidationSignals = data ? getInvalidationSignals(data, sortedHighlights) : [];
+  const nextTriggers = data ? getNextTriggers(data, sortedHighlights) : [];
   const linkedFocusNews = useMemo(
     () => linkNewsToFocus(data?.liveNews ?? [], focusHighlights),
     [data?.liveNews, focusHighlights],
   );
+  const verificationSignals = useMemo(() => getVerificationSignals(linkedFocusNews), [linkedFocusNews]);
   const emotionDrivers = useMemo(
     () => (data ? getEmotionDrivers(data, phaseInfo) : null),
     [data, phaseInfo],
@@ -919,13 +1035,6 @@ export default function StockHighlightsPrototype() {
     () => !!selectedStockForList && watchlist.some((item) => item.code === selectedStockForList.code),
     [selectedStockForList, watchlist],
   );
-
-  const stageInfo = data ? getSentimentStage(data) : null;
-  const phaseInfo = data ? getShortlinePhase(data, sortedHighlights) : null;
-  const checklist = data ? getShortlineChecklist(data, sortedHighlights) : [];
-  const shortlineSignal = data ? getShortlineSignal(data, sortedHighlights) : null;
-  const invalidationSignals = data ? getInvalidationSignals(data, sortedHighlights) : [];
-  const nextTriggers = data ? getNextTriggers(data, sortedHighlights) : [];
 
   const persistRecentStocks = (nextStock: SearchStock) => {
     setRecentStocks((current) => {
@@ -1481,7 +1590,7 @@ export default function StockHighlightsPrototype() {
                         <Zap className="h-5 w-5 text-amber-300" />
                         <div>
                           <div className="text-lg font-semibold">主线验证快讯</div>
-                          <div className="text-sm text-slate-400">只保留能强化、削弱或补充验证上方主线的增量消息。</div>
+                          <div className="text-sm text-slate-400">只留最能证明、扰动或等待确认主线的少量增量消息。</div>
                         </div>
                       </div>
                     </CardHeader>
@@ -1490,76 +1599,43 @@ export default function StockHighlightsPrototype() {
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-400">
                           暂无实时快讯。
                         </div>
+                      ) : verificationSignals.length === 0 ? (
+                        <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-400">
+                          当前快讯还没有和主线形成明确挂钩，先看上面的证据链和量价反馈。
+                        </div>
                       ) : (
-                        <>
-                          {linkedFocusNews.positive.length > 0 ? (
-                            <div className="space-y-3">
-                              <div className="text-sm font-semibold text-red-200">强化主线</div>
-                              {linkedFocusNews.positive.map(({ news, linkedLabel }, index) => (
-                                <a
-                                  key={`positive-${news.url}-${index}`}
-                                  className="block rounded-3xl border border-red-400/20 bg-red-500/8 p-4 transition hover:border-red-300/30"
-                                  href={news.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                                    <Badge className="border-red-400/20 bg-red-500/12 text-red-300">{linkedLabel}</Badge>
-                                    <Badge variant="outline">{news.source}</Badge>
-                                    <span>{news.time}</span>
-                                  </div>
-                                  <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
-                                </a>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {linkedFocusNews.risk.length > 0 ? (
-                            <div className="space-y-3">
-                              <div className="text-sm font-semibold text-emerald-200">风险扰动</div>
-                              {linkedFocusNews.risk.map(({ news, linkedLabel }, index) => (
-                                <a
-                                  key={`risk-${news.url}-${index}`}
-                                  className="block rounded-3xl border border-emerald-400/20 bg-emerald-500/8 p-4 transition hover:border-emerald-300/30"
-                                  href={news.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                                    <Badge className="border-emerald-400/20 bg-emerald-500/12 text-emerald-300">
-                                      {linkedLabel}
-                                    </Badge>
-                                    <Badge variant="outline">{news.source}</Badge>
-                                    <span>{news.time}</span>
-                                  </div>
-                                  <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
-                                </a>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {linkedFocusNews.neutral.length > 0 ? (
-                            <div className="space-y-3">
-                              <div className="text-sm font-semibold text-slate-200">待验证增量</div>
-                              {linkedFocusNews.neutral.map(({ news }, index) => (
-                                <a
-                                  key={`neutral-${news.url}-${index}`}
-                                  className="block rounded-3xl border border-white/10 bg-slate-950/80 p-4 transition hover:border-white/20"
-                                  href={news.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                                    <Badge variant="outline">{news.source}</Badge>
-                                    <span>{news.time}</span>
-                                    {news.tag ? <span>{news.tag}</span> : null}
-                                  </div>
-                                  <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
-                                </a>
-                              ))}
-                            </div>
-                          ) : null}
-                        </>
+                        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
+                          {verificationSignals.map((signal, index) => (
+                            <a
+                              key={`${signal.label}-${signal.news.url}-${index}`}
+                              className="block px-4 py-4 transition hover:bg-white/[0.03]"
+                              href={signal.news.url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <div className={index > 0 ? 'border-t border-white/10 pt-4' : ''}>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                  <Badge
+                                    className={
+                                      signal.tone === 'positive'
+                                        ? 'border-red-400/20 bg-red-500/12 text-red-300'
+                                        : signal.tone === 'risk'
+                                          ? 'border-emerald-400/20 bg-emerald-500/12 text-emerald-300'
+                                          : 'border-white/10 bg-white/5 text-slate-200'
+                                    }
+                                  >
+                                    {signal.label}
+                                  </Badge>
+                                  {signal.linkedLabel ? <Badge variant="outline">{signal.linkedLabel}</Badge> : null}
+                                  <Badge variant="outline">{signal.news.source}</Badge>
+                                  <span>{signal.news.time}</span>
+                                </div>
+                                <div className="mt-2 text-sm leading-6 text-slate-300">{signal.description}</div>
+                                <div className="mt-2 text-sm font-medium leading-6 text-white">{signal.news.title}</div>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
                       )}
                     </CardContent>
                   </Card>

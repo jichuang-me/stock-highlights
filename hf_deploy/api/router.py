@@ -61,7 +61,7 @@ def _extract_ai_profile(request: Request) -> Optional[Dict[str, str]]:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.9.0"}
+    return {"status": "ok", "version": "v4.10.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
