@@ -28,6 +28,7 @@ export function useStockSearch(query: string) {
         if (controller.signal.aborted) {
           return;
         }
+
         setResults([]);
         setError(err instanceof Error ? err.message : '搜索失败');
       } finally {

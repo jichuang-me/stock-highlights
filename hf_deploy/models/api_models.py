@@ -66,6 +66,7 @@ class HighlightsResponse(BaseModel):
     analysisPending: bool = False
     analysisModel: Optional[str] = None
     analysisUpdatedAt: Optional[str] = None
+    analysisProfileLabel: Optional[str] = None
     price: float
     pctChange: float
     highlights: List[HighlightItem] = Field(default_factory=list)

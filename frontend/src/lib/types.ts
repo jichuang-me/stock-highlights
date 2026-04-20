@@ -59,9 +59,26 @@ export type StockHighlightsResponse = {
   analysisPending: boolean;
   analysisModel?: string | null;
   analysisUpdatedAt?: string | null;
+  analysisProfileLabel?: string | null;
   price: number;
   pctChange: number;
   highlights: HighlightItem[];
   liveNews: NewsItem[];
   radar: RadarPoint[];
+};
+
+export type AnalysisProfileMode = 'server' | 'custom';
+
+export type AnalysisProfileKind = 'free' | 'api' | 'local';
+
+export type AnalysisProfile = {
+  id: string;
+  label: string;
+  kind: AnalysisProfileKind;
+  mode: AnalysisProfileMode;
+  vendor: string;
+  model: string;
+  baseUrl?: string;
+  apiKey?: string;
+  note?: string;
 };

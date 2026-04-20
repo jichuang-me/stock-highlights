@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getStockHighlights } from '../lib/api';
-import type { StockHighlightsResponse } from '../lib/types';
+import type { AnalysisProfile, StockHighlightsResponse } from '../lib/types';
 
 type HighlightsState = {
   data: StockHighlightsResponse | null;
@@ -9,7 +9,23 @@ type HighlightsState = {
   error: string;
 };
 
-export function useStockHighlights(code: string) {
+function profileSignature(profile?: AnalysisProfile | null) {
+  if (!profile) {
+    return '';
+  }
+
+  return [
+    profile.id,
+    profile.mode,
+    profile.kind,
+    profile.vendor,
+    profile.model,
+    profile.baseUrl || '',
+    profile.apiKey || '',
+  ].join('|');
+}
+
+export function useStockHighlights(code: string, profile?: AnalysisProfile | null) {
   const [state, setState] = useState<HighlightsState>({
     data: null,
     loading: false,
@@ -17,6 +33,7 @@ export function useStockHighlights(code: string) {
   });
   const pollTimerRef = useRef<number | null>(null);
   const activeControllerRef = useRef<AbortController | null>(null);
+  const currentProfileKey = profileSignature(profile);
 
   const clearPoll = useCallback(() => {
     if (pollTimerRef.current) {
@@ -41,10 +58,11 @@ export function useStockHighlights(code: string) {
       }
 
       try {
-        const data = await getStockHighlights(code, controller.signal, refresh);
+        const data = await getStockHighlights(code, controller.signal, refresh, profile);
         if (controller.signal.aborted) {
           return;
         }
+
         setState({ data, loading: false, error: '' });
         clearPoll();
 
@@ -57,6 +75,7 @@ export function useStockHighlights(code: string) {
         if (controller.signal.aborted) {
           return;
         }
+
         clearPoll();
         setState({
           data: null,
@@ -65,7 +84,7 @@ export function useStockHighlights(code: string) {
         });
       }
     },
-    [clearPoll, code],
+    [clearPoll, code, currentProfileKey, profile],
   );
 
   useEffect(() => {
@@ -83,7 +102,7 @@ export function useStockHighlights(code: string) {
       activeControllerRef.current?.abort();
       clearPoll();
     };
-  }, [clearPoll, code, load]);
+  }, [clearPoll, code, currentProfileKey, load]);
 
   const refreshAnalysis = useCallback(async () => {
     clearPoll();

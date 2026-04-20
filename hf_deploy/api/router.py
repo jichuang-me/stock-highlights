@@ -1,7 +1,7 @@
 import asyncio
-from typing import List
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Request
 
 try:
     from ..models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
@@ -36,9 +36,28 @@ def _rule_sentiment(risk_count: int, positive_count: int) -> str:
     return "neutral"
 
 
+def _extract_ai_profile(request: Request) -> Optional[Dict[str, str]]:
+    mode = (request.headers.get("X-AI-Profile-Mode") or "").strip()
+    vendor = (request.headers.get("X-AI-Profile-Vendor") or "").strip()
+    model = (request.headers.get("X-AI-Profile-Model") or "").strip()
+
+    if not mode and not vendor and not model:
+        return None
+
+    return {
+        "mode": mode or "server",
+        "label": (request.headers.get("X-AI-Profile-Label") or "").strip() or "系统默认",
+        "kind": (request.headers.get("X-AI-Profile-Kind") or "").strip() or "api",
+        "vendor": vendor,
+        "model": model,
+        "baseUrl": (request.headers.get("X-AI-Profile-Base-Url") or "").strip(),
+        "apiKey": (request.headers.get("X-AI-Profile-Api-Key") or "").strip(),
+    }
+
+
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.8.0"}
+    return {"status": "ok", "version": "v4.9.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -49,24 +68,31 @@ async def search(q: str = Query(..., min_length=1)):
 def _build_rule_market_impression(highlights: List[dict], hotness: dict, indicators: dict) -> str:
     if highlights:
         return (
-            f"当前已识别 {len(highlights)} 条高价值事件。"
+            f"当前识别到 {len(highlights)} 条短线相关事件。"
             f" 市场关注度 {hotness['rank']}，PE {indicators['pe']}，ROE {indicators['roe']}。"
         )
+
     return (
-        f"当前尚未识别到高价值公告事件。"
+        f"当前尚未识别到强驱动公告。"
         f" 市场关注度 {hotness['rank']}，PE {indicators['pe']}，ROE {indicators['roe']}。"
     )
 
 
-async def _build_highlights_response(code: str, refresh: bool = False) -> HighlightsResponse:
+async def _build_highlights_response(
+    code: str,
+    request: Request,
+    refresh: bool = False,
+) -> HighlightsResponse:
     prefix = "sh" if code.startswith("6") else "sz"
+    profile = _extract_ai_profile(request)
+
     (
         all_prices,
         hotness,
         indicators,
         raw_ann,
         news,
-        profile,
+        profile_info,
     ) = await asyncio.gather(
         asyncio.to_thread(fetch_sina_prices, f"{prefix}{code}"),
         asyncio.to_thread(fetch_xueqiu_hotness, code),
@@ -75,11 +101,12 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
         asyncio.to_thread(get_integrated_news, code),
         asyncio.to_thread(get_stock_profile, code),
     )
+
     stock_price = all_prices.get(code, {"price": 0.0, "pct": 0.0})
     highlights = analyze_highlights(raw_ann)
 
-    company_name = raw_ann[0].get("secName") if raw_ann else profile["name"]
-    industry = profile["industry"] or None
+    company_name = raw_ann[0].get("secName") if raw_ann else profile_info["name"]
+    industry = profile_info["industry"] or None
 
     risks = [item for item in highlights if item["side"] == "risk"]
     positives = [item for item in highlights if item["side"] == "positive"]
@@ -91,6 +118,7 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
     analysis_model = None
     analysis_pending = False
     analysis_updated_at = None
+    analysis_profile_label = profile.get("label") if profile else "系统默认"
 
     ai_summary, cache_key = await asyncio.to_thread(
         get_cached_ai_summary,
@@ -101,6 +129,7 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
         announcements=raw_ann,
         hotness=hotness,
         price_info=stock_price,
+        profile=profile,
     )
 
     if refresh:
@@ -114,6 +143,7 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
         analysis_mode = "ai"
         analysis_model = ai_summary.get("model")
         analysis_updated_at = ai_summary.get("updatedAt")
+        analysis_profile_label = ai_summary.get("profileLabel", analysis_profile_label)
     else:
         analysis_pending = await asyncio.to_thread(
             queue_ai_summary,
@@ -125,14 +155,15 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
             raw_ann,
             hotness,
             stock_price,
+            profile,
         )
 
     radar = [
-        RadarPoint(k="人气", v=_clamp(float(hotness["popularity"]))),
-        RadarPoint(k="波动", v=_clamp(abs(float(stock_price["pct"])) * 10)),
-        RadarPoint(k="新闻", v=_clamp(len(news) * 12)),
-        RadarPoint(k="风险", v=_clamp(len(risks) * 20)),
-        RadarPoint(k="亮点", v=_clamp(len(positives) * 20)),
+        RadarPoint(k="人气热度", v=_clamp(float(hotness["popularity"]))),
+        RadarPoint(k="盘中波动", v=_clamp(abs(float(stock_price["pct"])) * 10)),
+        RadarPoint(k="消息密度", v=_clamp(len(news) * 12)),
+        RadarPoint(k="风险压力", v=_clamp(len(risks) * 20)),
+        RadarPoint(k="看点强度", v=_clamp(len(positives) * 20)),
     ]
 
     return HighlightsResponse(
@@ -148,6 +179,7 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
         analysisPending=analysis_pending,
         analysisModel=analysis_model,
         analysisUpdatedAt=analysis_updated_at,
+        analysisProfileLabel=analysis_profile_label,
         price=float(stock_price["price"]),
         pctChange=float(stock_price["pct"]),
         highlights=highlights,
@@ -158,15 +190,17 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
 
 @router.get("/stocks/{code}/highlights", response_model=HighlightsResponse)
 async def get_stock_highlights(
+    request: Request,
     code: str = Path(..., pattern=r"^\d{6}$"),
     refresh: bool = Query(False),
 ):
-    return await _build_highlights_response(code, refresh=refresh)
+    return await _build_highlights_response(code, request, refresh=refresh)
 
 
 @router.get("/highlights", response_model=HighlightsResponse, include_in_schema=False)
 async def get_highlights_legacy(
+    request: Request,
     code: str = Query(..., pattern=r"^\d{6}$"),
     refresh: bool = Query(False),
 ):
-    return await _build_highlights_response(code, refresh=refresh)
+    return await _build_highlights_response(code, request, refresh=refresh)
