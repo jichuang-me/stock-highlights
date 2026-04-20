@@ -1005,28 +1005,14 @@ export default function StockHighlightsPrototype() {
 
             <Card className="rounded-[24px] border-white/10 bg-white/[0.03] text-white shadow-none">
               <CardContent className="space-y-3 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="rounded-2xl bg-cyan-400/15 p-2 text-cyan-300">
-                      <Search className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold">快速搜股</div>
-                      <div className="text-[11px] text-slate-500">代码、名称、拼音缩写</div>
-                    </div>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="rounded-2xl bg-cyan-400/15 p-2 text-cyan-300">
+                    <Search className="h-4 w-4" />
                   </div>
-
-                  <button
-                    className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-slate-900/80 px-3 py-1.5 text-left transition hover:border-white/20 lg:self-auto"
-                    onClick={() => setModelDialogOpen(true)}
-                    type="button"
-                  >
-                    <Settings2 className="h-3.5 w-3.5 text-cyan-300" />
-                    <span className="max-w-[9rem] truncate text-sm font-medium text-white">{activeProfile.label}</span>
-                    <Badge className="border-white/10 bg-white/5 px-2 py-0 text-[10px] leading-5 text-slate-300">
-                      {profileKindLabel[activeProfile.kind]}
-                    </Badge>
-                  </button>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">快速搜股</div>
+                    <div className="text-[11px] text-slate-500">代码、名称、拼音缩写</div>
+                  </div>
                 </div>
 
                 <form className="flex flex-col gap-2 md:flex-row" onSubmit={handleSubmit}>
