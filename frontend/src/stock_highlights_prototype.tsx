@@ -171,6 +171,94 @@ function getShortlineChecklist(data: StockHighlightsResponse, highlights: Highli
   return checklist.slice(0, 4);
 }
 
+function getShortlineSignal(data: StockHighlightsResponse, highlights: HighlightItem[]) {
+  const positiveScore = highlights
+    .filter((item) => item.side === 'positive')
+    .slice(0, 3)
+    .reduce((total, item) => total + item.score, 0);
+  const riskScore = highlights
+    .filter((item) => item.side === 'risk')
+    .slice(0, 3)
+    .reduce((total, item) => total + item.score, 0);
+
+  const rawScore =
+    50 +
+    positiveScore * 0.18 -
+    riskScore * 0.16 +
+    Math.min(data.liveNews.length * 4, 14) +
+    Math.max(Math.min(data.pctChange * 2.5, 16), -16);
+  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+
+  if (score >= 72) {
+    return {
+      score,
+      tone: 'strong' as const,
+      title: '可重点跟踪',
+      summary: '当前驱动、价格和消息形成了相对一致的短线合力，但要防止情绪过热后的回落。',
+    };
+  }
+
+  if (score >= 48) {
+    return {
+      score,
+      tone: 'watch' as const,
+      title: '边走边看',
+      summary: '有看点但一致性还不够，适合观察是否继续获得价格承接和消息扩散。',
+    };
+  }
+
+  return {
+    score,
+    tone: 'weak' as const,
+    title: '先观察不着急',
+    summary: '当前短线合力偏弱，更适合等待下一条催化或更明确的价格反馈。',
+  };
+}
+
+function getInvalidationSignals(data: StockHighlightsResponse, highlights: HighlightItem[]) {
+  const signals: string[] = [];
+  const topRisk = highlights.filter((item) => item.side === 'risk').slice(0, 2);
+
+  topRisk.forEach((item) => {
+    signals.push(`${item.label}继续发酵，短线预期会明显转弱。`);
+  });
+
+  if (data.summary.sentiment === 'positive' && data.pctChange <= 0) {
+    signals.push('正向逻辑如果持续拿不到价格承接，主线强度会快速下降。');
+  }
+
+  if (data.liveNews.length === 0) {
+    signals.push('当前缺少实时增量消息，若后续没有扩散，容易从看点变成孤立事件。');
+  }
+
+  if (signals.length === 0) {
+    signals.push('暂未看到明显失效信号，重点还是盯价格是否继续强化。');
+  }
+
+  return signals.slice(0, 3);
+}
+
+function getNextTriggers(data: StockHighlightsResponse, highlights: HighlightItem[]) {
+  const triggers: string[] = [];
+  const topPositive = highlights.filter((item) => item.side === 'positive').slice(0, 2);
+
+  topPositive.forEach((item) => {
+    triggers.push(`继续跟踪 ${item.label} 是否出现后续公告、快讯或板块联动。`);
+  });
+
+  if (data.pctChange > 0) {
+    triggers.push('观察后续是否继续放量、是否还能维持红盘强势。');
+  } else {
+    triggers.push('观察是否出现修复性拉升，确认市场是否愿意重新定价。');
+  }
+
+  if (data.liveNews.length > 0) {
+    triggers.push('留意实时快讯是否从个股扩散到板块或龙头映射。');
+  }
+
+  return triggers.slice(0, 3);
+}
+
 function loadSavedArray<T>(key: string, limit: number): T[] {
   try {
     const raw = window.localStorage.getItem(key);
@@ -569,6 +657,9 @@ export default function StockHighlightsPrototype() {
 
   const stageInfo = data ? getSentimentStage(data) : null;
   const checklist = data ? getShortlineChecklist(data, sortedHighlights) : [];
+  const shortlineSignal = data ? getShortlineSignal(data, sortedHighlights) : null;
+  const invalidationSignals = data ? getInvalidationSignals(data, sortedHighlights) : [];
+  const nextTriggers = data ? getNextTriggers(data, sortedHighlights) : [];
 
   const persistRecentStocks = (nextStock: SearchStock) => {
     setRecentStocks((current) => {
@@ -972,6 +1063,60 @@ export default function StockHighlightsPrototype() {
                         value={sentimentLabel(data.summary.sentiment)}
                         helper="优先采用 AI 结论，无结果时回退到规则统计。"
                       />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                      <div className="flex items-center gap-3">
+                        <TrendingUp className="h-5 w-5 text-cyan-300" />
+                        <div>
+                          <div className="text-lg font-semibold">短线态势板</div>
+                          <div className="text-sm text-slate-400">
+                            把当前信号压缩成更适合盘中和盘后观察的决策信息。
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 pt-6 lg:grid-cols-[0.72fr_1fr_1fr]">
+                      <div
+                        className={`rounded-[28px] border p-5 ${
+                          shortlineSignal?.tone === 'strong'
+                            ? 'border-red-400/20 bg-red-500/10'
+                            : shortlineSignal?.tone === 'watch'
+                              ? 'border-amber-400/20 bg-amber-500/10'
+                              : 'border-white/10 bg-slate-950/80'
+                        }`}
+                      >
+                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">短线态势分</div>
+                        <div className="mt-3 text-5xl font-semibold text-white">{shortlineSignal?.score ?? '--'}</div>
+                        <div className="mt-3 text-base font-medium text-white">{shortlineSignal?.title}</div>
+                        <p className="mt-3 text-sm leading-6 text-slate-300">{shortlineSignal?.summary}</p>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">失效条件</div>
+                        <div className="mt-4 space-y-3">
+                          {invalidationSignals.map((item, index) => (
+                            <div key={`${item}-${index}`} className="flex gap-3">
+                              <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                              <div className="text-sm leading-6 text-slate-300">{item}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">下一观察触发器</div>
+                        <div className="mt-4 space-y-3">
+                          {nextTriggers.map((item, index) => (
+                            <div key={`${item}-${index}`} className="flex gap-3">
+                              <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-300" />
+                              <div className="text-sm leading-6 text-slate-300">{item}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
 
