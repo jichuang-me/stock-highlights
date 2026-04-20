@@ -967,7 +967,7 @@ export default function StockHighlightsPrototype() {
               <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
                 <section className="space-y-6">
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-5 border-b border-white/10 pb-5">
+                    <CardHeader className="space-y-4 border-b border-white/10 pb-4">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-3">
@@ -1010,17 +1010,17 @@ export default function StockHighlightsPrototype() {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                        <div className="rounded-[28px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(8,47,73,0.08))] p-5">
+                      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                        <div className="rounded-[26px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(8,47,73,0.08))] p-5">
                           <div className="mb-2 text-xs uppercase tracking-[0.22em] text-cyan-300">短线主线</div>
                           <div className="text-2xl font-semibold text-white">
                             {data.headline || 'AI 尚未生成主线，先看规则看点和快讯。'}
                           </div>
-                          <p className="mt-4 text-sm leading-7 text-slate-200">{data.marketImpression}</p>
+                          <p className="mt-3 text-sm leading-6 text-slate-200">{data.marketImpression}</p>
                         </div>
 
                         <div className="grid gap-4">
-                          <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
+                          <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
                             <div className="text-xs uppercase tracking-[0.22em] text-slate-500">实时价格</div>
                             <div className="mt-3 flex items-end gap-3">
                               <div className="text-4xl font-semibold text-white">{data.price.toFixed(2)}</div>
@@ -1030,7 +1030,7 @@ export default function StockHighlightsPrototype() {
                             </div>
                           </div>
 
-                          <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
+                          <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
                             <div className="text-xs uppercase tracking-[0.22em] text-slate-500">情绪位置</div>
                             <div className="mt-3 text-xl font-semibold text-white">{stageInfo?.title}</div>
                             <p className="mt-2 text-sm leading-6 text-slate-300">{stageInfo?.description}</p>
@@ -1039,24 +1039,66 @@ export default function StockHighlightsPrototype() {
                       </div>
                     </CardHeader>
 
-                    <CardContent className="grid gap-4 pt-6 md:grid-cols-3">
-                      <SummaryTile
-                        title="风险事件"
-                        value={String(data.summary.riskCount)}
-                        helper="优先识别会压制风险偏好的公告事件。"
-                      />
-                      <SummaryTile
-                        title="看点事件"
-                        value={String(data.summary.positiveCount)}
-                        helper="追踪能被市场继续买单的催化线索。"
-                      />
-                      <SummaryTile
-                        title="当前情绪"
-                        value={sentimentLabel(data.summary.sentiment)}
-                        helper="优先采用 AI 结论，无结果时回退到规则统计。"
-                      />
+                    <CardContent className="space-y-4 pt-5">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <SummaryTile
+                          title="风险事件"
+                          value={String(data.summary.riskCount)}
+                          helper="优先识别会压制风险偏好的公告事件。"
+                        />
+                        <SummaryTile
+                          title="看点事件"
+                          value={String(data.summary.positiveCount)}
+                          helper="追踪能被市场继续买单的催化线索。"
+                        />
+                        <SummaryTile
+                          title="当前情绪"
+                          value={sentimentLabel(data.summary.sentiment)}
+                          helper="优先采用 AI 结论，无结果时回退到规则统计。"
+                        />
+                      </div>
 
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-5 md:col-span-3">
+                      <div className="grid gap-4 xl:grid-cols-[0.72fr_0.88fr_0.88fr]">
+                        <div
+                          className={`rounded-[26px] border p-5 ${
+                            shortlineSignal?.tone === 'strong'
+                              ? 'border-red-400/20 bg-red-500/10'
+                              : shortlineSignal?.tone === 'watch'
+                                ? 'border-amber-400/20 bg-amber-500/10'
+                                : 'border-white/10 bg-slate-950/80'
+                          }`}
+                        >
+                          <div className="text-xs uppercase tracking-[0.22em] text-slate-400">短线态势分</div>
+                          <div className="mt-3 text-5xl font-semibold text-white">{shortlineSignal?.score ?? '--'}</div>
+                          <div className="mt-3 text-base font-medium text-white">{shortlineSignal?.title}</div>
+                          <p className="mt-3 text-sm leading-6 text-slate-300">{shortlineSignal?.summary}</p>
+                        </div>
+
+                        <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs uppercase tracking-[0.22em] text-slate-500">情绪阶段</div>
+                            <Badge className={phaseBadgeClass(phaseInfo?.tone || 'neutral')}>
+                              {phaseInfo?.label || '观察中'}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 text-lg font-semibold text-white">{phaseInfo?.action}</div>
+                          <p className="mt-2 text-sm leading-6 text-slate-300">{phaseInfo?.reason}</p>
+                        </div>
+
+                        <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
+                          <div className="text-xs uppercase tracking-[0.22em] text-slate-500">下一观察触发器</div>
+                          <div className="mt-4 space-y-3">
+                            {nextTriggers.slice(0, 4).map((item, index) => (
+                              <div key={`${item}-${index}`} className="flex gap-3">
+                                <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-300" />
+                                <div className="text-sm leading-6 text-slate-300">{item}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-5">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div className="grid gap-3 text-sm text-slate-300 md:grid-cols-3 lg:flex-1">
                             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
@@ -1094,106 +1136,6 @@ export default function StockHighlightsPrototype() {
                               <Star className={`mr-2 h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
                               {watched ? '移出自选' : '加入自选'}
                             </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
-                        <TrendingUp className="h-5 w-5 text-cyan-300" />
-                        <div>
-                          <div className="text-lg font-semibold">短线态势板</div>
-                          <div className="text-sm text-slate-400">
-                            把当前信号压缩成更适合盘中和盘后观察的决策信息。
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="grid gap-4 pt-6 lg:grid-cols-[0.72fr_1fr_1fr]">
-                      <div
-                        className={`rounded-[28px] border p-5 ${
-                          shortlineSignal?.tone === 'strong'
-                            ? 'border-red-400/20 bg-red-500/10'
-                            : shortlineSignal?.tone === 'watch'
-                              ? 'border-amber-400/20 bg-amber-500/10'
-                              : 'border-white/10 bg-slate-950/80'
-                        }`}
-                      >
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">短线态势分</div>
-                        <div className="mt-3 text-5xl font-semibold text-white">{shortlineSignal?.score ?? '--'}</div>
-                        <div className="mt-3 text-base font-medium text-white">{shortlineSignal?.title}</div>
-                        <p className="mt-3 text-sm leading-6 text-slate-300">{shortlineSignal?.summary}</p>
-                      </div>
-
-                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">失效条件</div>
-                        <div className="mt-4 space-y-3">
-                          {invalidationSignals.map((item, index) => (
-                            <div key={`${item}-${index}`} className="flex gap-3">
-                              <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                              <div className="text-sm leading-6 text-slate-300">{item}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">下一观察触发器</div>
-                        <div className="mt-4 space-y-3">
-                          {nextTriggers.map((item, index) => (
-                            <div key={`${item}-${index}`} className="flex gap-3">
-                              <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-300" />
-                              <div className="text-sm leading-6 text-slate-300">{item}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
-                        <Flame className="h-5 w-5 text-red-300" />
-                        <div>
-                          <div className="text-lg font-semibold">情绪阶段</div>
-                          <div className="text-sm text-slate-400">
-                            用更接近短线语境的阶段标签，帮助你判断现在该追、该等还是该防守。
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="grid gap-4 pt-6 lg:grid-cols-[0.78fr_1.22fr]">
-                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-500">当前阶段</div>
-                        <div className="mt-4 flex items-center gap-3">
-                          <Badge className={phaseBadgeClass(phaseInfo?.tone || 'neutral')}>
-                            {phaseInfo?.label || '观察中'}
-                          </Badge>
-                          <div className="text-base font-semibold text-white">{phaseInfo?.action}</div>
-                        </div>
-                        <p className="mt-4 text-sm leading-6 text-slate-300">{phaseInfo?.reason}</p>
-                      </div>
-
-                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-500">节奏提示</div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-3">
-                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                            <div className="text-sm text-slate-400">阶段标签</div>
-                            <div className="mt-2 text-base font-semibold text-white">{phaseInfo?.label}</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                            <div className="text-sm text-slate-400">当前动作</div>
-                            <div className="mt-2 text-base font-semibold text-white">{phaseInfo?.action}</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                            <div className="text-sm text-slate-400">重点原因</div>
-                            <div className="mt-2 text-base font-semibold text-white">
-                              {stageInfo?.title || '等待确认'}
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -1244,15 +1186,15 @@ export default function StockHighlightsPrototype() {
                       </div>
 
                       <div className="space-y-3">
-                        <div className="text-sm font-semibold text-slate-200">观察清单</div>
+                        <div className="text-sm font-semibold text-slate-200">失效条件</div>
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
                           <div className="space-y-3">
-                            {checklist.map((item, index) => (
-                              <div key={`${item}-${index}`} className="flex gap-3">
-                                <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-300" />
-                                <div className="text-sm leading-6 text-slate-300">{item}</div>
-                              </div>
-                            ))}
+                            {invalidationSignals.map((item, index) => (
+                                <div key={`${item}-${index}`} className="flex gap-3">
+                                  <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                                  <div className="text-sm leading-6 text-slate-300">{item}</div>
+                                </div>
+                              ))}
                           </div>
                         </div>
                       </div>
