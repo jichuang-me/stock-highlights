@@ -455,18 +455,70 @@ function SummaryTile({
   );
 }
 
-function RadarMeter({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-300">{label}</span>
-        <span className="font-medium text-white">{Math.round(value)}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full rounded-full bg-cyan-400" style={{ width: `${Math.min(value, 100)}%` }} />
-      </div>
-    </div>
-  );
+function getRadarValue(data: StockHighlightsResponse | null, label: string) {
+  return data?.radar.find((point) => point.k === label)?.v ?? 0;
+}
+
+function getEmotionDrivers(data: StockHighlightsResponse, phaseInfo: ReturnType<typeof getShortlinePhase>) {
+  const popularity = Math.round(getRadarValue(data, '人气热度'));
+  const momentum = Math.round(getRadarValue(data, '看点强度'));
+  const newsDensity = Math.round(getRadarValue(data, '消息密度'));
+  const riskPressure = Math.round(getRadarValue(data, '风险压力'));
+  const volatility = Math.round(getRadarValue(data, '盘中波动'));
+
+  const drivers = [
+    {
+      label: '情绪阶段',
+      value: phaseInfo?.label || '观察中',
+      tone: phaseInfo?.tone === 'hot' ? 'text-red-300' : phaseInfo?.tone === 'cold' ? 'text-emerald-300' : 'text-amber-300',
+      description: phaseInfo?.reason || '当前还没有形成足够强的一致预期。',
+    },
+    {
+      label: '人气与关注',
+      value: `${popularity}`,
+      tone: popularity >= 60 ? 'text-red-300' : 'text-slate-200',
+      description:
+        popularity >= 60
+          ? '市场关注度已经抬起来了，主线更容易继续发酵。'
+          : '关注度还不够高，主线想继续走强还需要更多市场注意力。',
+    },
+    {
+      label: '消息与催化',
+      value: `${newsDensity}`,
+      tone: newsDensity >= 50 ? 'text-red-300' : 'text-slate-200',
+      description:
+        newsDensity >= 50
+          ? '当前有足够的增量消息在强化预期。'
+          : '增量消息还不够密集，主线容易缺少持续强化材料。',
+    },
+    {
+      label: '风险压力',
+      value: `${riskPressure}`,
+      tone: riskPressure >= 50 ? 'text-emerald-300' : 'text-slate-200',
+      description:
+        riskPressure >= 50
+          ? '风险项已经明显抬头，任何追强都要先看负反馈会不会继续放大。'
+          : '风险扰动暂时不算主导，重点还是看强势主线能否继续获得承接。',
+    },
+    {
+      label: '波动与承接',
+      value: `${volatility}`,
+      tone: volatility >= 55 ? 'text-amber-300' : 'text-slate-200',
+      description:
+        volatility >= 55
+          ? '波动较大，说明情绪交易浓度高，既可能加速也容易分歧。'
+          : '波动还算可控，当前更适合观察预期是否稳步强化。',
+    },
+  ];
+
+  const summary =
+    momentum >= 60 && riskPressure < 45
+      ? '当前更像正向主线在发酵，核心是看关注度和快讯是否继续强化。'
+      : riskPressure >= 50
+        ? '当前更像风险项在牵引短线预期，核心不是找新逻辑，而是看负反馈是否扩散。'
+        : '当前情绪并不极端，更多是边走边看，等待下一条确认信号。';
+
+  return { drivers, summary };
 }
 
 function HighlightDetailsDialog({
@@ -848,6 +900,10 @@ export default function StockHighlightsPrototype() {
   const linkedFocusNews = useMemo(
     () => linkNewsToFocus(data?.liveNews ?? [], focusHighlights),
     [data?.liveNews, focusHighlights],
+  );
+  const emotionDrivers = useMemo(
+    () => (data ? getEmotionDrivers(data, phaseInfo) : null),
+    [data, phaseInfo],
   );
 
   const watched = useMemo(
@@ -1387,15 +1443,30 @@ export default function StockHighlightsPrototype() {
                           <TrendingDown className="h-5 w-5 text-emerald-300" />
                         )}
                         <div>
-                          <div className="text-lg font-semibold">情绪雷达</div>
-                          <div className="text-sm text-slate-400">帮助你快速判断当前短线节奏。</div>
+                          <div className="text-lg font-semibold">情绪拆解</div>
+                          <div className="text-sm text-slate-400">把当前阶段拆成几个最影响短线预期的原因。</div>
                         </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-6">
-                      {data.radar.map((point) => (
-                        <RadarMeter key={point.k} label={point.k} value={point.v} />
-                      ))}
+                      {emotionDrivers ? (
+                        <>
+                          <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
+                            <div className="text-sm leading-6 text-slate-200">{emotionDrivers.summary}</div>
+                          </div>
+                          <div className="space-y-3">
+                            {emotionDrivers.drivers.map((driver) => (
+                              <div key={driver.label} className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-sm font-semibold text-white">{driver.label}</div>
+                                  <div className={`text-sm font-semibold ${driver.tone}`}>{driver.value}</div>
+                                </div>
+                                <div className="mt-2 text-sm leading-6 text-slate-300">{driver.description}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
                     </CardContent>
                   </Card>
 
