@@ -346,6 +346,76 @@ function getChainSegment(item: HighlightItem | undefined, prefix: string) {
   return matched ? matched.replace(`${prefix}：`, '').trim() : '';
 }
 
+type FocusNewsLink = {
+  news: StockHighlightsResponse['liveNews'][number];
+  linkedLabel: string;
+  score: number;
+};
+
+function splitKeywordPhrases(value: string) {
+  return value
+    .split(/[，。；：、“”（）()\/\s\-·]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2);
+}
+
+function buildHighlightKeywords(item: HighlightItem) {
+  const phrases = new Set<string>();
+  [item.label, item.category, item.why, item.thesis, ...item.evidence.map((evidence) => evidence.title)].forEach((value) => {
+    splitKeywordPhrases(value).forEach((phrase) => phrases.add(phrase));
+  });
+  return [...phrases];
+}
+
+function scoreNewsAgainstHighlight(title: string, item: HighlightItem) {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) {
+    return 0;
+  }
+
+  return buildHighlightKeywords(item).reduce((total, phrase) => {
+    if (normalizedTitle.includes(phrase)) {
+      return total + Math.min(phrase.length, 6);
+    }
+    return total;
+  }, 0);
+}
+
+function linkNewsToFocus(newsItems: StockHighlightsResponse['liveNews'], highlights: HighlightItem[]) {
+  const positive: FocusNewsLink[] = [];
+  const risk: FocusNewsLink[] = [];
+  const neutral: FocusNewsLink[] = [];
+
+  newsItems.forEach((news) => {
+    let bestMatch: { item: HighlightItem; score: number } | null = null;
+
+    highlights.forEach((item) => {
+      const score = scoreNewsAgainstHighlight(news.title, item);
+      if (!bestMatch || score > bestMatch.score) {
+        bestMatch = { item, score };
+      }
+    });
+
+    if (bestMatch && bestMatch.score > 0) {
+      const linked = { news, linkedLabel: bestMatch.item.label, score: bestMatch.score };
+      if (bestMatch.item.side === 'positive') {
+        positive.push(linked);
+      } else {
+        risk.push(linked);
+      }
+      return;
+    }
+
+    neutral.push({ news, linkedLabel: '', score: 0 });
+  });
+
+  return {
+    positive: positive.slice(0, 3),
+    risk: risk.slice(0, 3),
+    neutral: neutral.slice(0, 3),
+  };
+}
+
 function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
   if (tone === 'hot') return 'border-red-400/20 bg-red-500/12 text-red-300';
   if (tone === 'warm') return 'border-amber-400/20 bg-amber-500/12 text-amber-300';
@@ -774,6 +844,10 @@ export default function StockHighlightsPrototype() {
   const primaryValidation = useMemo(
     () => getChainSegment(primaryFocusHighlight, '后续验证'),
     [primaryFocusHighlight],
+  );
+  const linkedFocusNews = useMemo(
+    () => linkNewsToFocus(data?.liveNews ?? [], focusHighlights),
+    [data?.liveNews, focusHighlights],
   );
 
   const watched = useMemo(
@@ -1330,33 +1404,86 @@ export default function StockHighlightsPrototype() {
                       <div className="flex items-center gap-3">
                         <Zap className="h-5 w-5 text-amber-300" />
                         <div>
-                          <div className="text-lg font-semibold">实时情绪快讯</div>
-                          <div className="text-sm text-slate-400">只保留会影响短线预期的最新消息。</div>
+                          <div className="text-lg font-semibold">主线验证快讯</div>
+                          <div className="text-sm text-slate-400">只保留能强化、削弱或补充验证上方主线的增量消息。</div>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-3 pt-6">
+                    <CardContent className="space-y-5 pt-6">
                       {data.liveNews.length === 0 ? (
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-400">
                           暂无实时快讯。
                         </div>
                       ) : (
-                        data.liveNews.map((news, index) => (
-                          <a
-                            key={`${news.url}-${index}`}
-                            className="block rounded-3xl border border-white/10 bg-slate-950/80 p-4 transition hover:border-white/20"
-                            href={news.url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <Badge variant="outline">{news.source}</Badge>
-                              <span>{news.time}</span>
-                              {news.tag ? <span>{news.tag}</span> : null}
+                        <>
+                          {linkedFocusNews.positive.length > 0 ? (
+                            <div className="space-y-3">
+                              <div className="text-sm font-semibold text-red-200">强化主线</div>
+                              {linkedFocusNews.positive.map(({ news, linkedLabel }, index) => (
+                                <a
+                                  key={`positive-${news.url}-${index}`}
+                                  className="block rounded-3xl border border-red-400/20 bg-red-500/8 p-4 transition hover:border-red-300/30"
+                                  href={news.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                                    <Badge className="border-red-400/20 bg-red-500/12 text-red-300">{linkedLabel}</Badge>
+                                    <Badge variant="outline">{news.source}</Badge>
+                                    <span>{news.time}</span>
+                                  </div>
+                                  <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
+                                </a>
+                              ))}
                             </div>
-                            <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
-                          </a>
-                        ))
+                          ) : null}
+
+                          {linkedFocusNews.risk.length > 0 ? (
+                            <div className="space-y-3">
+                              <div className="text-sm font-semibold text-emerald-200">风险扰动</div>
+                              {linkedFocusNews.risk.map(({ news, linkedLabel }, index) => (
+                                <a
+                                  key={`risk-${news.url}-${index}`}
+                                  className="block rounded-3xl border border-emerald-400/20 bg-emerald-500/8 p-4 transition hover:border-emerald-300/30"
+                                  href={news.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                                    <Badge className="border-emerald-400/20 bg-emerald-500/12 text-emerald-300">
+                                      {linkedLabel}
+                                    </Badge>
+                                    <Badge variant="outline">{news.source}</Badge>
+                                    <span>{news.time}</span>
+                                  </div>
+                                  <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {linkedFocusNews.neutral.length > 0 ? (
+                            <div className="space-y-3">
+                              <div className="text-sm font-semibold text-slate-200">待验证增量</div>
+                              {linkedFocusNews.neutral.map(({ news }, index) => (
+                                <a
+                                  key={`neutral-${news.url}-${index}`}
+                                  className="block rounded-3xl border border-white/10 bg-slate-950/80 p-4 transition hover:border-white/20"
+                                  href={news.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                    <Badge variant="outline">{news.source}</Badge>
+                                    <span>{news.time}</span>
+                                    {news.tag ? <span>{news.tag}</span> : null}
+                                  </div>
+                                  <div className="mt-3 text-sm font-medium leading-6 text-white">{news.title}</div>
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
                       )}
                     </CardContent>
                   </Card>
