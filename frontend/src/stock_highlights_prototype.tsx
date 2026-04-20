@@ -1055,6 +1055,48 @@ export default function StockHighlightsPrototype() {
                         value={sentimentLabel(data.summary.sentiment)}
                         helper="优先采用 AI 结论，无结果时回退到规则统计。"
                       />
+
+                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-5 md:col-span-3">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="grid gap-3 text-sm text-slate-300 md:grid-cols-3 lg:flex-1">
+                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">模型配置</div>
+                              <div className="mt-2 font-medium text-white">
+                                {data.analysisProfileLabel || activeProfile.label}
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">执行模型</div>
+                              <div className="mt-2 font-medium text-white">{data.analysisModel || '尚未返回'}</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">最近更新</div>
+                              <div className="mt-2 font-medium text-white">{data.analysisUpdatedAt || '等待生成'}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-3">
+                            {data.analysisPending ? (
+                              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+                                已先返回规则结果，AI 总结生成后会自动刷新。
+                              </div>
+                            ) : null}
+                            <Button className="rounded-2xl" onClick={() => void refreshAnalysis()} type="button">
+                              <RefreshCcw className="mr-2 h-4 w-4" />
+                              重算 AI
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="rounded-2xl border-white/10 bg-slate-950 text-slate-200 hover:bg-slate-900"
+                              onClick={toggleWatchlist}
+                            >
+                              <Star className={`mr-2 h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
+                              {watched ? '移出自选' : '加入自选'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
 
@@ -1267,54 +1309,6 @@ export default function StockHighlightsPrototype() {
                 </section>
 
                 <section className="space-y-6">
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
-                        <Bot className="h-5 w-5 text-cyan-300" />
-                        <div>
-                          <div className="text-lg font-semibold">AI 状态</div>
-                          <div className="text-sm text-slate-400">明确告诉你结果来自哪里，以及何时更新。</div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4 pt-6 text-sm">
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-                        <div className="text-slate-400">当前模型配置</div>
-                        <div className="mt-2 font-medium text-white">
-                          {data.analysisProfileLabel || activeProfile.label}
-                        </div>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-                        <div className="text-slate-400">实际执行模型</div>
-                        <div className="mt-2 font-medium text-white">{data.analysisModel || '尚未返回'}</div>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-                        <div className="text-slate-400">最近更新时间</div>
-                        <div className="mt-2 font-medium text-white">{data.analysisUpdatedAt || '等待生成'}</div>
-                      </div>
-                      {data.analysisPending ? (
-                        <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-cyan-100">
-                          已先返回规则结果，AI 总结生成后会自动刷新。
-                        </div>
-                      ) : null}
-                      <div className="grid gap-3">
-                        <Button className="rounded-2xl" onClick={() => void refreshAnalysis()} type="button">
-                          <RefreshCcw className="mr-2 h-4 w-4" />
-                          重算 AI
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-2xl border-white/10 bg-slate-950 text-slate-200 hover:bg-slate-900"
-                          onClick={toggleWatchlist}
-                        >
-                          <Star className={`mr-2 h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
-                          {watched ? '移出自选' : '加入自选'}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
                     <CardHeader className="space-y-3 border-b border-white/10 pb-5">
                       <div className="flex items-center gap-3">
