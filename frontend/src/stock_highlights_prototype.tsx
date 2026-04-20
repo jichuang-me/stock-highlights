@@ -813,48 +813,48 @@ export default function StockHighlightsPrototype() {
               </button>
             </div>
 
-            <Card className="rounded-[26px] border-white/10 bg-white/[0.03] text-white shadow-none">
-              <CardHeader className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-cyan-400/15 p-2.5 text-cyan-300">
-                    <Search className="h-4.5 w-4.5" />
+            <Card className="rounded-[24px] border-white/10 bg-white/[0.03] text-white shadow-none">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="rounded-2xl bg-cyan-400/15 p-2 text-cyan-300">
+                      <Search className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">快速搜股</div>
+                      <div className="text-[11px] text-slate-500">代码、名称、拼音缩写</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-base font-semibold">快速搜股</div>
-                    <div className="text-xs text-slate-400">代码、名称、拼音缩写</div>
-                  </div>
+
+                  <button
+                    className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-slate-900/80 px-3 py-1.5 text-left transition hover:border-white/20 lg:self-auto"
+                    onClick={() => setModelDialogOpen(true)}
+                    type="button"
+                  >
+                    <Settings2 className="h-3.5 w-3.5 text-cyan-300" />
+                    <span className="max-w-[9rem] truncate text-sm font-medium text-white">{activeProfile.label}</span>
+                    <Badge className="border-white/10 bg-white/5 px-2 py-0 text-[10px] leading-5 text-slate-300">
+                      {profileKindLabel[activeProfile.kind]}
+                    </Badge>
+                  </button>
                 </div>
 
-                <button
-                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-left transition hover:border-white/20"
-                  onClick={() => setModelDialogOpen(true)}
-                  type="button"
-                >
-                  <Settings2 className="h-3.5 w-3.5 text-cyan-300" />
-                  <span className="text-sm font-medium text-white">{activeProfile.label}</span>
-                  <Badge className="border-white/10 bg-white/5 text-[10px] text-slate-300">
-                    {profileKindLabel[activeProfile.kind]}
-                  </Badge>
-                </button>
-              </CardHeader>
-
-              <CardContent className="space-y-4 pt-4">
-                <form className="flex flex-col gap-3 md:flex-row" onSubmit={handleSubmit}>
+                <form className="flex flex-col gap-2 md:flex-row" onSubmit={handleSubmit}>
                   <Input
-                    className="h-11 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
+                    className="h-10 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
                     placeholder="输入股票代码或简称，例如 600519、贵州茅台"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
-                  <Button className="h-11 rounded-2xl bg-cyan-400 text-slate-950 hover:bg-cyan-300" type="submit">
+                  <Button className="h-10 rounded-2xl bg-cyan-400 px-5 text-slate-950 hover:bg-cyan-300" type="submit">
                     {searchLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     查询
                   </Button>
                 </form>
 
                 {watchlist.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
                       <Heart className="h-3.5 w-3.5" />
                       自选观察
                     </div>
@@ -864,10 +864,10 @@ export default function StockHighlightsPrototype() {
                           key={stock.code}
                           type="button"
                           variant="outline"
-                          className="rounded-2xl border-white/10 bg-slate-950 text-slate-200 hover:bg-slate-900"
+                          className="h-8 rounded-2xl border-white/10 bg-slate-950 px-3 text-slate-200 hover:bg-slate-900"
                           onClick={() => handleSelectStock(stock)}
                         >
-                          <Star className="mr-2 h-4 w-4 fill-current text-amber-300" />
+                          <Star className="mr-1.5 h-3.5 w-3.5 fill-current text-amber-300" />
                           {stock.name} {stock.code}
                         </Button>
                       ))}
@@ -876,8 +876,8 @@ export default function StockHighlightsPrototype() {
                 ) : null}
 
                 {recentStocks.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
                       <History className="h-3.5 w-3.5" />
                       最近查看
                     </div>
@@ -887,7 +887,7 @@ export default function StockHighlightsPrototype() {
                           key={stock.code}
                           type="button"
                           variant="outline"
-                          className="rounded-2xl border-white/10 bg-slate-950 text-slate-200 hover:bg-slate-900"
+                          className="h-8 rounded-2xl border-white/10 bg-slate-950 px-3 text-slate-200 hover:bg-slate-900"
                           onClick={() => handleSelectStock(stock)}
                         >
                           {stock.name} {stock.code}
@@ -898,7 +898,7 @@ export default function StockHighlightsPrototype() {
                 ) : null}
 
                 {(searchLoading || results.length > 0 || searchError) && (
-                  <div className="rounded-3xl border border-white/10 bg-slate-950/90 p-2.5">
+                  <div className="rounded-3xl border border-white/10 bg-slate-950/90 p-2">
                     {searchLoading ? <div className="text-sm text-slate-400">正在获取候选股票...</div> : null}
                     {!searchLoading && searchError ? <div className="text-sm text-red-300">{searchError}</div> : null}
                     {!searchLoading && !searchError && results.length === 0 && query.trim() ? (
@@ -909,7 +909,7 @@ export default function StockHighlightsPrototype() {
                         {results.slice(0, 8).map((stock) => (
                           <button
                             key={stock.code}
-                            className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
+                            className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition ${
                               selectedStock?.code === stock.code
                                 ? 'border-cyan-400/60 bg-cyan-400/10'
                                 : 'border-white/10 bg-white/5 hover:border-white/20'
