@@ -30,7 +30,7 @@ AI_MODEL_POOL = [
     {"vendor": "deepseek", "model": "deepseek-chat", "priority": 1},
     {"vendor": "dashscope", "model": "qwen-plus", "priority": 2},
     {"vendor": "dashscope", "model": "qwen-max", "priority": 3},
-    {"vendor": "huggingface_direct", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 4},
+    {"vendor": "huggingface", "model": "Qwen/Qwen2.5-72B-Instruct", "priority": 4},
 ]
 
 DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "deepseek-reasoner")

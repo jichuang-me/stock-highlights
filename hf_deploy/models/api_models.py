@@ -60,7 +60,10 @@ class RadarPoint(BaseModel):
 class HighlightsResponse(BaseModel):
     stock: StockInfo
     summary: StockSummary
+    headline: Optional[str] = None
     marketImpression: str
+    analysisMode: Literal["ai", "rules"] = "rules"
+    analysisModel: Optional[str] = None
     price: float
     pctChange: float
     highlights: List[HighlightItem] = Field(default_factory=list)

@@ -53,7 +53,10 @@ export type RadarPoint = {
 export type StockHighlightsResponse = {
   stock: StockInfo;
   summary: StockSummary;
+  headline?: string | null;
   marketImpression: string;
+  analysisMode: 'ai' | 'rules';
+  analysisModel?: string | null;
   price: number;
   pctChange: number;
   highlights: HighlightItem[];

@@ -1,9 +1,11 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { startTransition, useMemo, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
+  Bot,
   ExternalLink,
   Loader2,
   Search,
+  ShieldAlert,
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
@@ -178,8 +180,10 @@ export default function StockHighlightsPrototype() {
   );
 
   const handleSelectStock = (stock: SearchStock) => {
-    setSelectedStock(stock);
-    setQuery(`${stock.code} ${stock.name}`);
+    startTransition(() => {
+      setSelectedStock(stock);
+      setQuery(`${stock.code} ${stock.name}`);
+    });
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -196,8 +200,8 @@ export default function StockHighlightsPrototype() {
           <Badge className="bg-cyan-400/15 text-cyan-300">Single Hugging Face Space</Badge>
           <h1 className="text-4xl font-semibold tracking-tight">Stock Highlights</h1>
           <p className="max-w-2xl text-sm leading-6 text-slate-400">
-            聚焦股票搜索、公告亮点、市场情绪和实时快讯。当前页面只消费后端真实提供的接口，
-            不再依赖未实现的历史、快照和对比功能。
+            适合个人使用的股票情报工作台。规则负责抓事实和证据，大模型负责总结市场主线，
+            在 Hugging Face 单体部署下保持低成本、可回退、可持续迭代。
           </p>
         </div>
 
@@ -271,7 +275,7 @@ export default function StockHighlightsPrototype() {
         {!selectedStock && (
           <Card className="mt-8 rounded-3xl border-dashed border-white/10 bg-transparent text-white shadow-none">
             <CardContent className="py-16 text-center text-slate-400">
-              先选择一只股票，再查看公告亮点、市场印象和实时快讯。
+              先选择一只股票，再查看 AI 结论、公告亮点、市场印象和实时快讯。
             </CardContent>
           </Card>
         )}
@@ -297,25 +301,57 @@ export default function StockHighlightsPrototype() {
               <>
                 <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
                   <Card className="rounded-3xl border-white/10 bg-white/5 text-white shadow-none lg:col-span-1">
-                    <CardHeader className="space-y-4">
-                      <div className="flex items-center justify-between gap-4">
+                    <CardHeader className="space-y-5">
+                      <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="text-3xl font-semibold">{displayStock.name}</div>
                           <div className="mt-2 text-sm text-slate-400">
                             {displayStock.code} · {displayStock.industry}
                           </div>
                         </div>
-                        <Badge className="bg-slate-800 text-slate-200">{sentimentLabel(data.summary.sentiment)}</Badge>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge className="bg-slate-800 text-slate-200">{sentimentLabel(data.summary.sentiment)}</Badge>
+                          <Badge
+                            className={
+                              data.analysisMode === 'ai'
+                                ? 'bg-cyan-400/15 text-cyan-300'
+                                : 'bg-amber-400/15 text-amber-300'
+                            }
+                          >
+                            {data.analysisMode === 'ai' ? (
+                              <>
+                                <Bot className="mr-1 h-3.5 w-3.5" />
+                                AI 研判
+                              </>
+                            ) : (
+                              <>
+                                <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+                                规则回退
+                              </>
+                            )}
+                          </Badge>
+                        </div>
                       </div>
+
                       <div>
                         <div className="text-4xl font-semibold">{data.price.toFixed(2)}</div>
                         <div className={data.pctChange >= 0 ? 'text-emerald-300' : 'text-red-300'}>
                           {percentText(data.pctChange)}
                         </div>
                       </div>
+
+                      {data.headline ? (
+                        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50">
+                          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-cyan-300">AI Headline</div>
+                          <div className="text-lg font-semibold text-white">{data.headline}</div>
+                        </div>
+                      ) : null}
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-3">
                       <p className="text-sm leading-6 text-slate-300">{data.marketImpression}</p>
+                      {data.analysisModel ? (
+                        <div className="text-xs text-slate-500">模型来源：{data.analysisModel}</div>
+                      ) : null}
                     </CardContent>
                   </Card>
 
@@ -332,7 +368,7 @@ export default function StockHighlightsPrototype() {
                   <SummaryCard
                     title="市场情绪"
                     value={sentimentLabel(data.summary.sentiment)}
-                    helper="按亮点和风险事件数量做的粗略归纳"
+                    helper="优先采用 AI 结论，无结果时回退到规则统计"
                   />
                 </div>
 
@@ -342,7 +378,7 @@ export default function StockHighlightsPrototype() {
                       <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                           <div className="text-lg font-semibold">公告亮点</div>
-                          <div className="text-sm text-slate-400">仅展示后端已识别的公告事件</div>
+                          <div className="text-sm text-slate-400">规则层负责抽取事实证据，供 AI 进一步总结</div>
                         </div>
                         <Badge className="bg-slate-800 text-slate-200">{sortedHighlights.length} 条</Badge>
                       </CardHeader>
@@ -394,7 +430,7 @@ export default function StockHighlightsPrototype() {
                           </div>
                           <div>
                             <div className="text-lg font-semibold">雷达概览</div>
-                            <div className="text-sm text-slate-400">后端返回的基础维度评分</div>
+                            <div className="text-sm text-slate-400">轻量维度评分，用来辅助快速判断</div>
                           </div>
                         </div>
                       </CardHeader>
@@ -409,7 +445,7 @@ export default function StockHighlightsPrototype() {
                   <Card className="rounded-3xl border-white/10 bg-white/5 text-white shadow-none">
                     <CardHeader>
                       <div className="text-lg font-semibold">实时快讯</div>
-                      <div className="text-sm text-slate-400">当前接入财联社电报聚合结果</div>
+                      <div className="text-sm text-slate-400">当前接入财联社电报，用作 AI 研判的实时上下文</div>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {data.liveNews.length === 0 && (
