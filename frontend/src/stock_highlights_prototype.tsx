@@ -152,6 +152,64 @@ function getSentimentStage(data: StockHighlightsResponse) {
   };
 }
 
+function getShortlinePhase(data: StockHighlightsResponse, highlights: HighlightItem[]) {
+  const positiveCount = highlights.filter((item) => item.side === 'positive').length;
+  const riskCount = highlights.filter((item) => item.side === 'risk').length;
+  const newsCount = data.liveNews.length;
+
+  if (data.summary.sentiment === 'positive') {
+    if (data.pctChange >= 7 && positiveCount >= 2) {
+      return {
+        label: '高潮',
+        action: '只适合盯强，不适合无条件追高。',
+        reason: '价格和看点同时很强，说明市场已经给出高溢价，但过热回落风险也在同步放大。',
+        tone: 'hot' as const,
+      };
+    }
+
+    if (data.pctChange >= 2 && (positiveCount >= 1 || newsCount >= 2)) {
+      return {
+        label: '发酵',
+        action: '重点看是否继续扩散和获得承接。',
+        reason: '正向催化正在形成一致预期，最关键的是后续还能不能继续被市场买单。',
+        tone: 'warm' as const,
+      };
+    }
+
+    return {
+      label: '启动',
+      action: '先观察量价确认，再决定是否升级关注。',
+      reason: '有正向信号，但价格反馈和情绪一致性还不够强，更像刚开始被注意到。',
+      tone: 'warm' as const,
+    };
+  }
+
+  if (data.summary.sentiment === 'negative') {
+    if (data.pctChange <= -6 || riskCount >= 2) {
+      return {
+        label: '退潮',
+        action: '先防守，等风险释放后再看是否有修复。',
+        reason: '风险事件或负反馈已经压制了短线预期，当前更像情绪撤退阶段。',
+        tone: 'cold' as const,
+      };
+    }
+
+    return {
+      label: '分歧转弱',
+      action: '先看能否止跌和减弱负面扩散。',
+      reason: '市场开始犹豫，负面因素尚未完全定价结束，预期容易继续走弱。',
+      tone: 'cold' as const,
+    };
+  }
+
+  return {
+    label: '分歧',
+    action: '等待一侧先赢，别在模糊阶段仓促下判断。',
+    reason: '当前多空没有形成单边预期，更适合等待新的价格或消息确认。',
+    tone: 'neutral' as const,
+  };
+}
+
 function getShortlineChecklist(data: StockHighlightsResponse, highlights: HighlightItem[]) {
   const topItems = highlights.slice(0, 3);
   const fallback = [
@@ -257,6 +315,13 @@ function getNextTriggers(data: StockHighlightsResponse, highlights: HighlightIte
   }
 
   return triggers.slice(0, 3);
+}
+
+function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
+  if (tone === 'hot') return 'border-red-400/20 bg-red-500/12 text-red-300';
+  if (tone === 'warm') return 'border-amber-400/20 bg-amber-500/12 text-amber-300';
+  if (tone === 'cold') return 'border-emerald-400/20 bg-emerald-500/12 text-emerald-300';
+  return 'border-white/10 bg-white/5 text-slate-200';
 }
 
 function loadSavedArray<T>(key: string, limit: number): T[] {
@@ -656,6 +721,7 @@ export default function StockHighlightsPrototype() {
   );
 
   const stageInfo = data ? getSentimentStage(data) : null;
+  const phaseInfo = data ? getShortlinePhase(data, sortedHighlights) : null;
   const checklist = data ? getShortlineChecklist(data, sortedHighlights) : [];
   const shortlineSignal = data ? getShortlineSignal(data, sortedHighlights) : null;
   const invalidationSignals = data ? getInvalidationSignals(data, sortedHighlights) : [];
@@ -1115,6 +1181,52 @@ export default function StockHighlightsPrototype() {
                               <div className="text-sm leading-6 text-slate-300">{item}</div>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                      <div className="flex items-center gap-3">
+                        <Flame className="h-5 w-5 text-red-300" />
+                        <div>
+                          <div className="text-lg font-semibold">情绪阶段</div>
+                          <div className="text-sm text-slate-400">
+                            用更接近短线语境的阶段标签，帮助你判断现在该追、该等还是该防守。
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 pt-6 lg:grid-cols-[0.78fr_1.22fr]">
+                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-slate-500">当前阶段</div>
+                        <div className="mt-4 flex items-center gap-3">
+                          <Badge className={phaseBadgeClass(phaseInfo?.tone || 'neutral')}>
+                            {phaseInfo?.label || '观察中'}
+                          </Badge>
+                          <div className="text-base font-semibold text-white">{phaseInfo?.action}</div>
+                        </div>
+                        <p className="mt-4 text-sm leading-6 text-slate-300">{phaseInfo?.reason}</p>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-slate-500">节奏提示</div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            <div className="text-sm text-slate-400">阶段标签</div>
+                            <div className="mt-2 text-base font-semibold text-white">{phaseInfo?.label}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            <div className="text-sm text-slate-400">当前动作</div>
+                            <div className="mt-2 text-base font-semibold text-white">{phaseInfo?.action}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            <div className="text-sm text-slate-400">重点原因</div>
+                            <div className="mt-2 text-base font-semibold text-white">
+                              {stageInfo?.title || '等待确认'}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
