@@ -973,8 +973,14 @@ export default function StockHighlightsPrototype() {
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-3">
                             <h2 className="text-3xl font-semibold">{displayStock.name}</h2>
-                            <div className="text-3xl font-semibold text-white">{data.price.toFixed(2)}</div>
-                            <Badge className={priceBadgeClass(data.pctChange)}>{percentText(data.pctChange)}</Badge>
+                            <div
+                              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 ${priceBadgeClass(
+                                data.pctChange,
+                              )}`}
+                            >
+                              <span className="text-2xl font-semibold">{data.price.toFixed(2)}</span>
+                              <span className="text-lg font-semibold">{percentText(data.pctChange)}</span>
+                            </div>
                             <button
                               type="button"
                               aria-label={watched ? '移出自选' : '加入自选'}
