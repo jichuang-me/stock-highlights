@@ -1133,17 +1133,13 @@ export default function StockHighlightsPrototype() {
                   </div>
                 </div>
 
-                <form className="flex flex-col gap-2 md:flex-row" onSubmit={handleSubmit}>
+                <form className="flex" onSubmit={handleSubmit}>
                   <Input
                     className="h-10 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
                     placeholder="输入股票代码或简称，例如 600519、贵州茅台"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
-                  <Button className="h-10 rounded-2xl bg-cyan-400 px-5 text-slate-950 hover:bg-cyan-300" type="submit">
-                    {searchLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    查询
-                  </Button>
                 </form>
 
                 {watchlist.length > 0 ? (
