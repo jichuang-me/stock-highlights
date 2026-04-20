@@ -108,23 +108,27 @@ def _build_evidence_chain(meta: Dict[str, Any], evidence: List[Dict[str, Any]]) 
     if not evidence:
         return []
 
+    latest = evidence[0]
+
     if len(evidence) == 1:
-        only = evidence[0]
         return [
-            f"当前关键：{only['title']}（{only['published_at']}）",
-            f"验证重点：{meta['game_view']}",
+            f"起点：{latest['title']}（{latest['published_at']}）",
+            "强化：当前还没有看到同类公告继续强化，先按单点催化处理。",
+            f"当前关键：市场会先围绕“{latest['title']}”定价，重点看是否继续获得价格和消息承接。",
+            f"后续验证：{meta['game_view']}",
         ]
 
     oldest = evidence[-1]
-    latest = evidence[0]
     chain = [f"起点：{oldest['title']}（{oldest['published_at']}）"]
 
     middle = evidence[1:-1]
     if middle:
         chain.append("强化：" + "；".join(f"{item['title']}（{item['published_at']}）" for item in middle[:2]))
+    else:
+        chain.append("强化：当前没有更多中间证据，先看最新公告能否把原有逻辑继续推升。")
 
     chain.append(f"当前关键：{latest['title']}（{latest['published_at']}）")
-    chain.append(f"验证重点：{meta['game_view']}")
+    chain.append(f"后续验证：{meta['game_view']}")
     return chain
 
 

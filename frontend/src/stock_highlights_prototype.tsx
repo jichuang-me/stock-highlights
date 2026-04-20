@@ -425,7 +425,7 @@ function HighlightDetailsDialog({
                 </div>
 
                 <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">证据链</div>
+                  <div className="text-sm font-semibold text-slate-900">完整证据链</div>
                   <div className="mt-3 space-y-3">
                     {item.evidenceChain.map((chainItem, index) => (
                       <div key={`${item.id}-detail-chain-${index}`} className="flex gap-3">

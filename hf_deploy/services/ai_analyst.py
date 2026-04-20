@@ -25,10 +25,17 @@ SYSTEM_PROMPT = """
 你的任务不是复述资讯，而是基于给定的公告、快讯、价格和热度信息，
 提炼出当前这只股票最值得短线关注的主线、情绪和风险。
 
+如果上下文里有 focusHighlights，你必须优先围绕这些焦点看点写结论，
+不要重新罗列一批重复标题。请优先抓最重要的一条主线，
+并在 marketImpression 中明确提到：
+1. 当前最强驱动是什么
+2. 当前关键证据是什么
+3. 接下来要验证或防守的点是什么
+
 请严格返回 JSON，格式如下：
 {
   "headline": "一句话短线结论，18字以内",
-  "marketImpression": "120字以内，说明当前最强驱动、情绪位置和需要盯防的风险",
+  "marketImpression": "120字以内，说明当前最强驱动、情绪位置、当前关键证据和需要盯防的验证点",
   "sentiment": "positive | negative | neutral"
 }
 """
@@ -226,7 +233,9 @@ def _iter_attempts(profile: Optional[Dict[str, str]]) -> List[Dict[str, str]]:
 
 def _run_ai_summary(key: str, context: Dict[str, Any], profile: Optional[Dict[str, str]]) -> None:
     user_input = (
-        "请根据以下个股上下文生成短线结论，优先回答当前最强驱动、情绪位置和失效风险。\n"
+        "请根据以下个股上下文生成短线结论。"
+        "如果存在 focusHighlights，请只抓最重要的一条主线，优先引用其中的当前关键证据和后续验证点。"
+        "不要把多个重复公告分别讲一遍。\n"
         f"{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
 
