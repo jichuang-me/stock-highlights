@@ -885,6 +885,15 @@ export default function StockHighlightsPrototype() {
     () => sortedHighlights.filter((item) => !focusHighlights.some((focus) => focus.id === item.id)),
     [focusHighlights, sortedHighlights],
   );
+  const compactSecondaryHighlights = useMemo(
+    () =>
+      secondaryHighlights.slice(0, 3).map((item) => ({
+        item,
+        currentKey: getChainSegment(item, '当前关键'),
+        validation: getChainSegment(item, '后续验证'),
+      })),
+    [secondaryHighlights],
+  );
   const primaryFocusHighlight = useMemo(
     () => [...focusHighlights].sort((left, right) => right.score - left.score)[0],
     [focusHighlights],
@@ -1371,9 +1380,9 @@ export default function StockHighlightsPrototype() {
                       <div className="flex items-center gap-3">
                         <Sparkles className="h-5 w-5 text-cyan-300" />
                         <div>
-                          <div className="text-lg font-semibold">个股看点流</div>
+                          <div className="text-lg font-semibold">次级线索</div>
                           <div className="text-sm text-slate-400">
-                            按短线价值排序，只保留真正值得点开看的事件。
+                            只留主线之外，但还值得顺手跟踪的少量补充信号。
                           </div>
                         </div>
                       </div>
@@ -1388,32 +1397,42 @@ export default function StockHighlightsPrototype() {
                           当前最重要的看点已经在上方拆解完成，暂时没有额外但同样值得展开的次级线索。
                         </div>
                       ) : (
-                        secondaryHighlights.map((item) => {
-                          const Icon = sideMeta[item.side].icon;
-                          return (
-                            <button
-                              key={item.id}
-                              className={`w-full rounded-[28px] border p-5 text-left transition hover:border-white/20 ${sideMeta[item.side].panel}`}
-                              onClick={() => setActiveHighlight(item)}
-                              type="button"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="rounded-2xl bg-white/10 p-2">
-                                    <Icon className="h-4 w-4" />
-                                  </div>
-                                  <div>
-                                    <div className="text-lg font-semibold text-white">{item.label}</div>
-                                    <div className="text-sm text-slate-300">{item.category}</div>
+                        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
+                          {compactSecondaryHighlights.map(({ item, currentKey, validation }, index) => {
+                            const Icon = sideMeta[item.side].icon;
+                            return (
+                              <button
+                                key={item.id}
+                                className="w-full px-4 py-4 text-left transition hover:bg-white/[0.03]"
+                                onClick={() => setActiveHighlight(item)}
+                                type="button"
+                              >
+                                <div className={index > 0 ? 'border-t border-white/10 pt-4' : ''}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex items-start gap-3">
+                                      <div className="rounded-2xl bg-white/5 p-2">
+                                        <Icon className="h-4 w-4" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <div className="text-sm font-semibold text-white">{item.label}</div>
+                                          <div className="text-xs text-slate-500">{item.category}</div>
+                                        </div>
+                                        <div className="mt-2 text-sm leading-6 text-slate-300">
+                                          {currentKey || item.importance}
+                                        </div>
+                                        {validation ? (
+                                          <div className="mt-2 text-xs leading-5 text-slate-500">后续看：{validation}</div>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    <Badge className={`${sideMeta[item.side].chip} shrink-0`}>{item.score}</Badge>
                                   </div>
                                 </div>
-                                <Badge className={sideMeta[item.side].chip}>Score {item.score}</Badge>
-                              </div>
-                              <div className="mt-4 text-sm leading-7 text-slate-200">{item.thesis}</div>
-                              <div className="mt-3 text-sm leading-7 text-slate-300">{item.importance}</div>
-                            </button>
-                          );
-                        })
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
