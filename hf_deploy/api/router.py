@@ -38,7 +38,7 @@ def _rule_sentiment(risk_count: int, positive_count: int) -> str:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.7.0"}
+    return {"status": "ok", "version": "v4.8.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -90,6 +90,7 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
     analysis_mode = "rules"
     analysis_model = None
     analysis_pending = False
+    analysis_updated_at = None
 
     ai_summary, cache_key = await asyncio.to_thread(
         get_cached_ai_summary,
@@ -114,7 +115,6 @@ async def _build_highlights_response(code: str, refresh: bool = False) -> Highli
         analysis_model = ai_summary.get("model")
         analysis_updated_at = ai_summary.get("updatedAt")
     else:
-        analysis_updated_at = None
         analysis_pending = await asyncio.to_thread(
             queue_ai_summary,
             cache_key,
@@ -165,5 +165,8 @@ async def get_stock_highlights(
 
 
 @router.get("/highlights", response_model=HighlightsResponse, include_in_schema=False)
-async def get_highlights_legacy(code: str = Query(..., pattern=r"^\d{6}$"), refresh: bool = Query(False)):
+async def get_highlights_legacy(
+    code: str = Query(..., pattern=r"^\d{6}$"),
+    refresh: bool = Query(False),
+):
     return await _build_highlights_response(code, refresh=refresh)

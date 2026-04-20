@@ -3,12 +3,14 @@ import {
   AlertTriangle,
   Bot,
   ExternalLink,
+  Heart,
   History,
   Loader2,
   RefreshCcw,
   Search,
   ShieldAlert,
   Sparkles,
+  Star,
   TrendingUp,
 } from 'lucide-react';
 
@@ -28,6 +30,7 @@ import {
 import { Input } from './components/ui/input';
 
 const RECENT_STOCKS_KEY = 'stock-highlights:recent-stocks';
+const WATCHLIST_KEY = 'stock-highlights:watchlist';
 
 const sideMeta = {
   risk: {
@@ -53,6 +56,12 @@ function sentimentLabel(sentiment: 'positive' | 'negative' | 'neutral') {
 function percentText(value: number) {
   const sign = value > 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}%`;
+}
+
+function priceTextClass(value: number) {
+  if (value > 0) return 'text-red-300';
+  if (value < 0) return 'text-emerald-300';
+  return 'text-slate-300';
 }
 
 function SummaryCard({
@@ -159,22 +168,31 @@ export default function StockHighlightsPrototype() {
   const [selectedStock, setSelectedStock] = useState<SearchStock | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<HighlightItem | null>(null);
   const [recentStocks, setRecentStocks] = useState<SearchStock[]>([]);
+  const [watchlist, setWatchlist] = useState<SearchStock[]>([]);
 
   const { results, loading: searchLoading, error: searchError } = useStockSearch(query);
   const { data, loading, error, refreshAnalysis } = useStockHighlights(selectedStock?.code ?? '');
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(RECENT_STOCKS_KEY);
-      if (!raw) {
-        return;
+      const rawRecent = window.localStorage.getItem(RECENT_STOCKS_KEY);
+      if (rawRecent) {
+        const parsedRecent = JSON.parse(rawRecent) as SearchStock[];
+        if (Array.isArray(parsedRecent)) {
+          setRecentStocks(parsedRecent.slice(0, 6));
+        }
       }
-      const parsed = JSON.parse(raw) as SearchStock[];
-      if (Array.isArray(parsed)) {
-        setRecentStocks(parsed.slice(0, 6));
+
+      const rawWatchlist = window.localStorage.getItem(WATCHLIST_KEY);
+      if (rawWatchlist) {
+        const parsedWatchlist = JSON.parse(rawWatchlist) as SearchStock[];
+        if (Array.isArray(parsedWatchlist)) {
+          setWatchlist(parsedWatchlist.slice(0, 12));
+        }
       }
     } catch {
       window.localStorage.removeItem(RECENT_STOCKS_KEY);
+      window.localStorage.removeItem(WATCHLIST_KEY);
     }
   }, []);
 
@@ -194,15 +212,48 @@ export default function StockHighlightsPrototype() {
     };
   }, [data, selectedStock]);
 
+  const selectedStockForList = useMemo(() => {
+    if (!displayStock) {
+      return null;
+    }
+    return {
+      code: displayStock.code,
+      name: displayStock.name,
+      industry: displayStock.industry,
+      price: data?.price ?? selectedStock?.price ?? 0,
+      pct: data?.pctChange ?? selectedStock?.pct ?? 0,
+    } satisfies SearchStock;
+  }, [data, displayStock, selectedStock]);
+
   const sortedHighlights = useMemo(
     () => [...(data?.highlights ?? [])].sort((left, right) => right.score - left.score),
     [data?.highlights],
+  );
+
+  const isWatched = useMemo(
+    () => !!selectedStockForList && watchlist.some((item) => item.code === selectedStockForList.code),
+    [selectedStockForList, watchlist],
   );
 
   const persistRecentStocks = (nextStock: SearchStock) => {
     setRecentStocks((current) => {
       const next = [nextStock, ...current.filter((item) => item.code !== nextStock.code)].slice(0, 6);
       window.localStorage.setItem(RECENT_STOCKS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const toggleWatchlist = () => {
+    if (!selectedStockForList) {
+      return;
+    }
+
+    setWatchlist((current) => {
+      const exists = current.some((item) => item.code === selectedStockForList.code);
+      const next = exists
+        ? current.filter((item) => item.code !== selectedStockForList.code)
+        : [selectedStockForList, ...current.filter((item) => item.code !== selectedStockForList.code)].slice(0, 12);
+      window.localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
       return next;
     });
   };
@@ -260,6 +311,29 @@ export default function StockHighlightsPrototype() {
               </Button>
             </form>
 
+            {watchlist.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <Heart className="h-4 w-4" />
+                  自选观察
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {watchlist.map((stock) => (
+                    <Button
+                      key={stock.code}
+                      type="button"
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                      onClick={() => handleSelectStock(stock)}
+                    >
+                      <Star className="mr-2 h-4 w-4 fill-current text-amber-300" />
+                      {stock.name} {stock.code}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {recentStocks.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-slate-400">
@@ -310,9 +384,7 @@ export default function StockHighlightsPrototype() {
                         </div>
                         <div className="text-right">
                           <div className="font-medium text-white">{stock.price?.toFixed(2) ?? '--'}</div>
-                          <div className={stock.pct >= 0 ? 'text-emerald-300' : 'text-red-300'}>
-                            {percentText(stock.pct || 0)}
-                          </div>
+                          <div className={priceTextClass(stock.pct || 0)}>{percentText(stock.pct || 0)}</div>
                         </div>
                       </button>
                     ))}
@@ -389,11 +461,20 @@ export default function StockHighlightsPrototype() {
                         </div>
                       </div>
 
-                      <div>
-                        <div className="text-4xl font-semibold">{data.price.toFixed(2)}</div>
-                        <div className={data.pctChange >= 0 ? 'text-emerald-300' : 'text-red-300'}>
-                          {percentText(data.pctChange)}
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-4xl font-semibold">{data.price.toFixed(2)}</div>
+                          <div className={priceTextClass(data.pctChange)}>{percentText(data.pctChange)}</div>
                         </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                          onClick={toggleWatchlist}
+                        >
+                          <Star className={`mr-2 h-4 w-4 ${isWatched ? 'fill-current text-amber-300' : ''}`} />
+                          {isWatched ? '移出自选' : '加入自选'}
+                        </Button>
                       </div>
 
                       {data.headline ? (
