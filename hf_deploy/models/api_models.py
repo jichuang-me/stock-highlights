@@ -33,8 +33,11 @@ class HighlightItem(BaseModel):
     score: int = Field(ge=0, le=100)
     category: str
     why: str
+    thesis: str
+    importance: str
     interpretation: str
     game_view: str
+    evidenceChain: List[str] = Field(default_factory=list)
     evidence: List[Evidence] = Field(default_factory=list)
 
 

@@ -59,46 +59,143 @@ EVENT_CATALOG = {
 }
 
 
-def analyze_highlights(raw_ann: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    highlights: List[Dict[str, Any]] = []
+def _match_event(title: str) -> tuple[str, Dict[str, Any]] | tuple[None, None]:
+    for event_key, meta in EVENT_CATALOG.items():
+        if any(keyword in title for keyword in meta["keywords"]):
+            return event_key, meta
+    return None, None
 
-    for item in raw_ann[:20]:
+
+def _format_date(timestamp: Any) -> tuple[int, str]:
+    if not timestamp:
+        return 0, "未知日期"
+    ts = int(timestamp)
+    return ts, dt.datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
+
+
+def _build_evidence(item: Dict[str, Any]) -> Dict[str, Any]:
+    title = item.get("announcementTitle", "").strip()
+    raw_ts, published_at = _format_date(item.get("announcementTime"))
+    return {
+        "source": "巨潮公告",
+        "title": title,
+        "published_at": published_at,
+        "url": build_pdf_url(item.get("adjunctUrl", "")),
+        "_timestamp": raw_ts,
+    }
+
+
+def _build_thesis(meta: Dict[str, Any], evidence: List[Dict[str, Any]]) -> str:
+    latest = evidence[0]
+    if len(evidence) == 1:
+        return f"{meta['label']} 当前主要由“{latest['title']}”触发，短线先围绕这条主线看市场是否继续买单。"
+    return (
+        f"{meta['label']} 不是单点消息，最近连续出现 {len(evidence)} 条相关公告，"
+        f"当前关键证据是“{latest['title']}”。"
+    )
+
+
+def _build_importance(meta: Dict[str, Any], evidence: List[Dict[str, Any]]) -> str:
+    if len(evidence) == 1:
+        return f"当前阶段最重要的是验证这条消息能否继续扩散，而不是只看单次刺激。{meta['game_view']}"
+    return (
+        f"这类信号已经形成连续证据链，说明市场后续会更关注是否继续升级、兑现或被证伪。"
+        f"{meta['game_view']}"
+    )
+
+
+def _build_evidence_chain(meta: Dict[str, Any], evidence: List[Dict[str, Any]]) -> List[str]:
+    if not evidence:
+        return []
+
+    if len(evidence) == 1:
+        only = evidence[0]
+        return [
+            f"当前关键：{only['title']}（{only['published_at']}）",
+            f"验证重点：{meta['game_view']}",
+        ]
+
+    oldest = evidence[-1]
+    latest = evidence[0]
+    chain = [f"起点：{oldest['title']}（{oldest['published_at']}）"]
+
+    middle = evidence[1:-1]
+    if middle:
+        chain.append("强化：" + "；".join(f"{item['title']}（{item['published_at']}）" for item in middle[:2]))
+
+    chain.append(f"当前关键：{latest['title']}（{latest['published_at']}）")
+    chain.append(f"验证重点：{meta['game_view']}")
+    return chain
+
+
+def _public_evidence(evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    for item in evidence:
+        cleaned.append(
+            {
+                "source": item["source"],
+                "title": item["title"],
+                "published_at": item["published_at"],
+                "url": item["url"],
+            }
+        )
+    return cleaned
+
+
+def analyze_highlights(raw_ann: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    grouped: Dict[str, Dict[str, Any]] = {}
+
+    for item in raw_ann[:30]:
         title = item.get("announcementTitle", "").strip()
         if not title:
             continue
 
-        published_at = "未知日期"
-        timestamp = item.get("announcementTime")
-        if timestamp:
-            published_at = dt.datetime.fromtimestamp(timestamp / 1000).strftime("%Y-%m-%d")
-
-        matched = None
-        for meta in EVENT_CATALOG.values():
-            if any(keyword in title for keyword in meta["keywords"]):
-                matched = meta
-                break
-
-        if not matched:
+        event_key, meta = _match_event(title)
+        if not event_key or not meta:
             continue
+
+        evidence = _build_evidence(item)
+        group = grouped.setdefault(
+            event_key,
+            {
+                "meta": meta,
+                "titles": set(),
+                "evidence": [],
+            },
+        )
+
+        if evidence["title"] in group["titles"]:
+            continue
+
+        group["titles"].add(evidence["title"])
+        group["evidence"].append(evidence)
+
+    highlights: List[Dict[str, Any]] = []
+
+    for event_key, group in grouped.items():
+        meta = group["meta"]
+        evidence = sorted(group["evidence"], key=lambda item: item["_timestamp"], reverse=True)
+        if not evidence:
+            continue
+
+        latest = evidence[0]
+        score = min(100, meta["severity"] + min(max(len(evidence) - 1, 0) * 3, 9))
+        side = "risk" if meta["severity"] >= 80 else "positive"
 
         highlights.append(
             {
-                "id": f"ev-{item.get('announcementId', '0')}",
-                "side": "risk" if matched["severity"] >= 80 else "positive",
-                "label": matched["label"],
-                "score": matched["severity"],
-                "category": matched["category"],
-                "why": title,
-                "interpretation": matched["interpretation"],
-                "game_view": matched["game_view"],
-                "evidence": [
-                    {
-                        "source": "巨潮公告",
-                        "title": title,
-                        "published_at": published_at,
-                        "url": build_pdf_url(item.get("adjunctUrl", "")),
-                    }
-                ],
+                "id": f"{event_key.lower()}-{latest['_timestamp'] or len(evidence)}",
+                "side": side,
+                "label": meta["label"],
+                "score": score,
+                "category": meta["category"],
+                "why": latest["title"],
+                "thesis": _build_thesis(meta, evidence),
+                "importance": _build_importance(meta, evidence),
+                "interpretation": meta["interpretation"],
+                "game_view": meta["game_view"],
+                "evidenceChain": _build_evidence_chain(meta, evidence),
+                "evidence": _public_evidence(evidence[:4]),
             }
         )
 

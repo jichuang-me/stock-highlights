@@ -317,6 +317,26 @@ function getNextTriggers(data: StockHighlightsResponse, highlights: HighlightIte
   return triggers.slice(0, 3);
 }
 
+function getFocusHighlights(highlights: HighlightItem[]) {
+  const focus: HighlightItem[] = [];
+  const topPositive = highlights.find((item) => item.side === 'positive');
+  const topRisk = highlights.find((item) => item.side === 'risk');
+
+  if (topPositive) {
+    focus.push(topPositive);
+  }
+
+  if (topRisk) {
+    focus.push(topRisk);
+  }
+
+  if (focus.length === 0) {
+    return highlights.slice(0, 2);
+  }
+
+  return focus;
+}
+
 function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
   if (tone === 'hot') return 'border-red-400/20 bg-red-500/12 text-red-300';
   if (tone === 'warm') return 'border-amber-400/20 bg-amber-500/12 text-amber-300';
@@ -391,22 +411,35 @@ function HighlightDetailsDialog({
               <DialogDescription>{item.category}</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-5">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-sm font-semibold text-slate-900">触发原因</div>
-                <p className="mt-2 text-sm leading-6 text-slate-700">{item.why}</p>
-              </div>
+              <div className="space-y-5">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">核心判断</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{item.thesis}</p>
+                </div>
 
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-sm font-semibold text-slate-900">短线解读</div>
-                <p className="mt-2 text-sm leading-6 text-slate-700">{item.interpretation}</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{item.game_view}</p>
-              </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">为什么它现在重要</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{item.importance}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">{item.interpretation}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.game_view}</p>
+                </div>
 
-              <div className="space-y-3">
-                <div className="text-sm font-semibold text-slate-900">证据来源</div>
-                {item.evidence.map((evidence) => (
-                  <div key={`${item.id}-${evidence.url}`} className="rounded-2xl border p-4">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">证据链</div>
+                  <div className="mt-3 space-y-3">
+                    {item.evidenceChain.map((chainItem, index) => (
+                      <div key={`${item.id}-detail-chain-${index}`} className="flex gap-3">
+                        <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-500" />
+                        <div className="text-sm leading-6 text-slate-700">{chainItem}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="text-sm font-semibold text-slate-900">证据来源</div>
+                  {item.evidence.map((evidence) => (
+                    <div key={`${item.id}-${evidence.url}`} className="rounded-2xl border p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{evidence.source}</Badge>
                       <span className="text-xs text-slate-500">{evidence.published_at}</span>
@@ -420,11 +453,11 @@ function HighlightDetailsDialog({
                           原文 <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : null}
+                      </div>
+                      <div className="mt-2 text-sm font-semibold text-slate-900">{evidence.title}</div>
                     </div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">{evidence.title}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
             </div>
           </>
         )}
@@ -715,6 +748,11 @@ export default function StockHighlightsPrototype() {
   const sortedHighlights = useMemo(
     () => [...(data?.highlights ?? [])].sort((left, right) => right.score - left.score),
     [data?.highlights],
+  );
+  const focusHighlights = useMemo(() => getFocusHighlights(sortedHighlights), [sortedHighlights]);
+  const secondaryHighlights = useMemo(
+    () => sortedHighlights.filter((item) => !focusHighlights.some((focus) => focus.id === item.id)),
+    [focusHighlights, sortedHighlights],
   );
 
   const watched = useMemo(
@@ -1122,8 +1160,8 @@ export default function StockHighlightsPrototype() {
                     <CardContent className="grid gap-4 pt-6 lg:grid-cols-[1fr_1fr]">
                       <div className="space-y-3">
                         <div className="text-sm font-semibold text-slate-200">核心驱动</div>
-                        {sortedHighlights.length > 0 ? (
-                          sortedHighlights.slice(0, 3).map((item) => {
+                        {focusHighlights.length > 0 ? (
+                          focusHighlights.map((item) => {
                             const Icon = sideMeta[item.side].icon;
                             return (
                               <button
@@ -1139,7 +1177,16 @@ export default function StockHighlightsPrototype() {
                                   </div>
                                   <Badge className={sideMeta[item.side].chip}>Score {item.score}</Badge>
                                 </div>
-                                <div className="mt-3 text-sm leading-6 text-slate-200">{item.interpretation}</div>
+                                <div className="mt-3 text-sm leading-6 text-slate-100">{item.thesis}</div>
+                                <div className="mt-3 text-sm leading-6 text-slate-300">{item.importance}</div>
+                                <div className="mt-4 space-y-2">
+                                  {item.evidenceChain.slice(0, 3).map((chainItem, index) => (
+                                    <div key={`${item.id}-chain-${index}`} className="flex gap-2 text-sm text-slate-200">
+                                      <div className="mt-1 h-2 w-2 rounded-full bg-white/70" />
+                                      <div className="leading-6">{chainItem}</div>
+                                    </div>
+                                  ))}
+                                </div>
                               </button>
                             );
                           })
@@ -1183,8 +1230,12 @@ export default function StockHighlightsPrototype() {
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-5 text-sm text-slate-400">
                           还没有识别到可用看点，先等待新公告、快讯或价格反馈。
                         </div>
+                      ) : secondaryHighlights.length === 0 ? (
+                        <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-5 text-sm text-slate-400">
+                          当前最重要的看点已经在上方拆解完成，暂时没有额外但同样值得展开的次级线索。
+                        </div>
                       ) : (
-                        sortedHighlights.map((item) => {
+                        secondaryHighlights.map((item) => {
                           const Icon = sideMeta[item.side].icon;
                           return (
                             <button
@@ -1205,8 +1256,8 @@ export default function StockHighlightsPrototype() {
                                 </div>
                                 <Badge className={sideMeta[item.side].chip}>Score {item.score}</Badge>
                               </div>
-                              <div className="mt-4 text-sm leading-7 text-slate-200">{item.why}</div>
-                              <div className="mt-3 text-sm leading-7 text-slate-300">{item.game_view}</div>
+                              <div className="mt-4 text-sm leading-7 text-slate-200">{item.thesis}</div>
+                              <div className="mt-3 text-sm leading-7 text-slate-300">{item.importance}</div>
                             </button>
                           );
                         })

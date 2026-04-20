@@ -71,8 +71,9 @@ async def search(q: str = Query(..., min_length=1)):
 
 def _build_rule_market_impression(highlights: List[dict], hotness: dict, indicators: dict) -> str:
     if highlights:
+        top_item = highlights[0]
         return (
-            f"当前识别到 {len(highlights)} 条短线相关事件。"
+            f"当前最强主线是{top_item['label']}。{top_item['importance']}"
             f" 市场关注度 {hotness['rank']}，PE {indicators['pe']}，ROE {indicators['roe']}。"
         )
 
@@ -131,6 +132,7 @@ async def _build_highlights_response(
         indicators=indicators,
         news=news,
         announcements=raw_ann,
+        highlights=highlights,
         hotness=hotness,
         price_info=stock_price,
         profile=profile,
@@ -157,6 +159,7 @@ async def _build_highlights_response(
             indicators,
             news,
             raw_ann,
+            highlights,
             hotness,
             stock_price,
             profile,

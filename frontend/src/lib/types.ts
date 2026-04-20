@@ -32,8 +32,11 @@ export type HighlightItem = {
   score: number;
   category: string;
   why: string;
+  thesis: string;
+  importance: string;
   interpretation: string;
   game_view: string;
+  evidenceChain: string[];
   evidence: EvidenceItem[];
 };
 

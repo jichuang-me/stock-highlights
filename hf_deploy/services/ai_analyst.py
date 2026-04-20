@@ -170,6 +170,7 @@ def _build_context(
     indicators: Dict[str, Any],
     news: List[Dict[str, Any]],
     announcements: List[Dict[str, Any]],
+    highlights: List[Dict[str, Any]],
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
     profile: Optional[Dict[str, str]] = None,
@@ -183,6 +184,17 @@ def _build_context(
         },
         "indicators": indicators,
         "announcements": [item.get("announcementTitle", "") for item in announcements[:8]],
+        "focusHighlights": [
+            {
+                "side": item.get("side", ""),
+                "label": item.get("label", ""),
+                "score": item.get("score", 0),
+                "thesis": item.get("thesis", ""),
+                "importance": item.get("importance", ""),
+                "evidenceChain": item.get("evidenceChain", []),
+            }
+            for item in highlights[:4]
+        ],
         "news": [item.get("title", "") for item in news[:8]],
         "analysisProfile": {
             "label": profile.get("label", "系统默认") if profile else "系统默认",
@@ -266,11 +278,12 @@ def get_cached_ai_summary(
     indicators: Dict[str, Any],
     news: List[Dict[str, Any]],
     announcements: List[Dict[str, Any]],
+    highlights: List[Dict[str, Any]],
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
     profile: Optional[Dict[str, str]] = None,
 ) -> tuple[Optional[Dict[str, Any]], str]:
-    context = _build_context(code, name, indicators, news, announcements, hotness, price_info, profile)
+    context = _build_context(code, name, indicators, news, announcements, highlights, hotness, price_info, profile)
     key = _cache_key(context)
 
     with _analysis_lock:
@@ -288,6 +301,7 @@ def queue_ai_summary(
     indicators: Dict[str, Any],
     news: List[Dict[str, Any]],
     announcements: List[Dict[str, Any]],
+    highlights: List[Dict[str, Any]],
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
     profile: Optional[Dict[str, str]] = None,
@@ -300,7 +314,7 @@ def queue_ai_summary(
             return True
         _analysis_jobs.add(key)
 
-    context = _build_context(code, name, indicators, news, announcements, hotness, price_info, profile)
+    context = _build_context(code, name, indicators, news, announcements, highlights, hotness, price_info, profile)
     thread = threading.Thread(target=_run_ai_summary, args=(key, context, profile), daemon=True)
     thread.start()
     return True
