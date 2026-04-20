@@ -2,6 +2,8 @@ import logging
 import os
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 PORT = int(os.getenv("PORT", 7860))
@@ -17,13 +19,12 @@ CORS_ALLOW_ORIGINS = [
     if origin.strip()
 ]
 
-# AI 密钥配置 (从环境变量读取)
+# AI keys from environment variables.
 HF_TOKEN = os.getenv("HF_TOKEN")
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-# AI 模型优先级池 (Vendor, Model ID, Priority)
-# 厂商支持: deepseek (官方), dashscope (OpenAI 兼容), huggingface (Router), huggingface_direct (Inference API)
+# AI model priority pool.
 AI_MODEL_POOL = [
     {"vendor": "deepseek", "model": "deepseek-reasoner", "priority": 0},
     {"vendor": "deepseek", "model": "deepseek-chat", "priority": 1},
@@ -35,6 +36,22 @@ AI_MODEL_POOL = [
 DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "deepseek-reasoner")
 
 
+def _build_retry_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=2,
+        backoff_factor=0.4,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=("GET", "HEAD", "OPTIONS"),
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    session.headers.update({"User-Agent": USER_AGENT})
+    return session
+
+
+HTTP_SESSION = _build_retry_session()
 XQ_SESSION = requests.Session()
 XQ_SESSION.headers.update({"User-Agent": USER_AGENT})
 

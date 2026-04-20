@@ -1,58 +1,82 @@
-import aiohttp
+import logging
 import time
-from typing import List, Dict, Any
-from .market_service import fetch_sina_prices_async
+from typing import Any, Dict, List
 
-# --- Simple TTL Cache ---
-SEARCH_CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL = 300 # 5 minutes
+try:
+    from ..core.config import HTTP_SESSION, REQUEST_TIMEOUT, USER_AGENT
+    from .market_service import fetch_sina_prices
+except ImportError:
+    from core.config import HTTP_SESSION, REQUEST_TIMEOUT, USER_AGENT
+    from services.market_service import fetch_sina_prices
 
-async def search_stock_enhanced(q: str) -> List[Dict[str, Any]]:
-    q = q.strip().upper()
-    if not q: return []
-    
-    # Check Cache
+
+SEARCH_URL = "https://searchapi.eastmoney.com/api/suggest/get"
+SEARCH_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Referer": "https://data.eastmoney.com/",
+    "Accept": "application/json, text/plain, */*",
+}
+SEARCH_CACHE_TTL = 300
+_search_cache: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
+
+
+def _fetch_search_items(q: str) -> List[Dict[str, Any]]:
+    cache_key = q.strip()
     now = time.time()
-    if q in SEARCH_CACHE:
-        cache_entry = SEARCH_CACHE[q]
-        if now - cache_entry['time'] < CACHE_TTL:
-            return cache_entry['data']
-    
-    url = "https://searchapi.eastmoney.com/api/suggest/get"
-    params = {"input": q, "type": "14", "token": "D43A3003844103BA765F8397C224F2AD"}
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=5) as resp:
-                data = await resp.json()
-                items = data.get("QuotationCodeTable", {}).get("Data", [])
-                if not items: return []
-                
-                # Fetch prices for top results in parallel
-                top_codes = []
-                for it in items[:8]: # Increase to 8 for better density
-                    c = it["Code"]
-                    prefix = "sh" if c.startswith("6") else "sz"
-                    top_codes.append(f"{prefix}{c}")
-                
-                prices = await fetch_sina_prices_async(",".join(top_codes))
-                
-                results = []
-                for it in items:
-                    code = it["Code"]
-                    p = prices.get(code, {"price": 0, "pct": 0})
-                    results.append({
-                        "code": code,
-                        "name": it["Name"],
-                        "industry": it["SecurityTypeName"],
-                        "price": p["price"],
-                        "pct": p["pct"]
-                    })
-                
-                # Update Cache
-                SEARCH_CACHE[q] = {'time': now, 'data': results}
-                return results
-    except Exception as e:
-        import logging
-        logging.error(f"Async Search Service Error: {e}")
+    cached = _search_cache.get(cache_key)
+    if cached and now - cached[0] < SEARCH_CACHE_TTL:
+        return cached[1]
+
+    params = {"input": cache_key, "type": "14", "token": "D43A3003844103BA765F8397C224F2AD"}
+    resp = HTTP_SESSION.get(SEARCH_URL, params=params, headers=SEARCH_HEADERS, timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    items = resp.json().get("QuotationCodeTable", {}).get("Data", [])
+    _search_cache[cache_key] = (now, items)
+    return items
+
+
+def search_stock_enhanced(q: str) -> List[Dict[str, Any]]:
+    keyword = q.strip()
+    if not keyword:
         return []
+
+    try:
+        items = _fetch_search_items(keyword)
+        if not items:
+            return []
+
+        top_codes = []
+        for item in items[:5]:
+            code = item["Code"]
+            prefix = "sh" if code.startswith("6") else "sz"
+            top_codes.append(f"{prefix}{code}")
+
+        prices = fetch_sina_prices(",".join(top_codes))
+        return [
+            {
+                "code": item["Code"],
+                "name": item["Name"],
+                "industry": item.get("SecurityTypeName"),
+                "price": prices.get(item["Code"], {}).get("price", 0.0),
+                "pct": prices.get(item["Code"], {}).get("pct", 0.0),
+            }
+            for item in items
+        ]
+    except Exception as exc:
+        logging.error("Search service failed for %s: %s", keyword, exc)
+        return []
+
+
+def get_stock_profile(code: str) -> Dict[str, str]:
+    try:
+        items = _fetch_search_items(code)
+        for item in items:
+            if item.get("Code") == code:
+                return {
+                    "code": code,
+                    "name": item.get("Name") or code,
+                    "industry": item.get("SecurityTypeName") or "",
+                }
+    except Exception as exc:
+        logging.error("Stock profile fetch failed for %s: %s", code, exc)
+    return {"code": code, "name": code, "industry": ""}

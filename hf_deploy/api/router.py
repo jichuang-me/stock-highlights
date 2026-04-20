@@ -1,107 +1,101 @@
-from fastapi import APIRouter, Query, HTTPException
-import asyncio
 from typing import List
-from ..models.api_models import SearchStock, HighlightsResponse, HighlightItem, StockSummary
-from ..services.search_service import search_stock_enhanced
-from ..services.market_service import (
-    fetch_sina_prices_async, fetch_xueqiu_hotness_async, fetch_eastmoney_indicators_async
-)
-from ..services.announcement_service import fetch_announcements_async
-from ..services.news_service import get_integrated_news_async
-from ..services.ai_analyst import generate_advanced_highlights, generate_rule_based_highlights
+
+from fastapi import APIRouter, Path, Query
+
+try:
+    from ..models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
+    from ..services.announcement_service import fetch_announcements
+    from ..services.highlight_engine import analyze_highlights
+    from ..services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
+    from ..services.news_service import get_integrated_news
+    from ..services.search_service import get_stock_profile, search_stock_enhanced
+except ImportError:
+    from models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
+    from services.announcement_service import fetch_announcements
+    from services.highlight_engine import analyze_highlights
+    from services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
+    from services.news_service import get_integrated_news
+    from services.search_service import get_stock_profile, search_stock_enhanced
 
 
 router = APIRouter(prefix="/api")
 
+
+def _clamp(value: float, lower: float = 0, upper: float = 100) -> float:
+    return max(lower, min(upper, value))
+
+
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.4.0-AI-SYNC"}
+    return {"status": "ok", "version": "v4.5.0"}
+
 
 @router.get("/stocks/search", response_model=List[SearchStock])
 async def search(q: str = Query(..., min_length=1)):
-    return await search_stock_enhanced(q)
+    return search_stock_enhanced(q)
+
+
+def _build_highlights_response(code: str) -> HighlightsResponse:
+    prefix = "sh" if code.startswith("6") else "sz"
+    stock_price = fetch_sina_prices(f"{prefix}{code}").get(code, {"price": 0.0, "pct": 0.0})
+    hotness = fetch_xueqiu_hotness(code)
+    indicators = fetch_eastmoney_indicators(code)
+    raw_ann = fetch_announcements(code)
+    highlights = analyze_highlights(raw_ann)
+    news = get_integrated_news(code)
+    profile = get_stock_profile(code)
+
+    risks = [item for item in highlights if item["side"] == "risk"]
+    positives = [item for item in highlights if item["side"] == "positive"]
+    sentiment = "neutral"
+    if len(risks) > len(positives):
+        sentiment = "negative"
+    elif len(positives) > len(risks):
+        sentiment = "positive"
+
+    company_name = raw_ann[0].get("secName") if raw_ann else profile["name"]
+    industry = profile["industry"] or None
+
+    if highlights:
+        market_impression = (
+            f"当前公告面识别为 {sentiment}，共命中 {len(highlights)} 条高价值事件。"
+            f" 关注度 {hotness['rank']}，PE {indicators['pe']}，ROE {indicators['roe']}。"
+        )
+    else:
+        market_impression = (
+            f"当前尚未识别到高价值公告事件。关注度 {hotness['rank']}，"
+            f"PE {indicators['pe']}，ROE {indicators['roe']}。"
+        )
+
+    radar = [
+        RadarPoint(k="人气", v=_clamp(float(hotness["popularity"]))),
+        RadarPoint(k="波动", v=_clamp(abs(float(stock_price["pct"])) * 10)),
+        RadarPoint(k="新闻", v=_clamp(len(news) * 12)),
+        RadarPoint(k="风险", v=_clamp(len(risks) * 20)),
+        RadarPoint(k="亮点", v=_clamp(len(positives) * 20)),
+    ]
+
+    return HighlightsResponse(
+        stock=StockInfo(code=code, name=company_name or code, industry=industry),
+        summary=StockSummary(
+            riskCount=len(risks),
+            positiveCount=len(positives),
+            sentiment=sentiment,
+        ),
+        marketImpression=market_impression,
+        price=float(stock_price["price"]),
+        pctChange=float(stock_price["pct"]),
+        highlights=highlights,
+        liveNews=news,
+        radar=radar,
+    )
+
 
 @router.get("/stocks/{code}/highlights", response_model=HighlightsResponse)
-async def get_highlights_v2(code: str):
-    return await get_highlights(code)
+async def get_stock_highlights(code: str = Path(..., pattern=r"^\d{6}$")):
+    return _build_highlights_response(code)
+
 
 @router.get("/highlights", response_model=HighlightsResponse, include_in_schema=False)
-async def get_highlights(code: str = Query(..., pattern="^\d{6}$")):
-    """
-    获取个股多维研报 (全异步并发版)
-    """
-    try:
-        # 1. 基础并行数据获取
-        tasks = [
-            fetch_sina_prices_async(code),
-            fetch_xueqiu_hotness_async(code),
-            fetch_eastmoney_indicators_async(code),
-            fetch_announcements_async(code),
-            get_integrated_news_async(code)
-        ]
-        
-        # 并发启动 5 个网络 IO 任务
-        price_data, hotness, indicators, raw_ann, news = await asyncio.gather(*tasks)
-        stock_p = price_data.get(code, {"price": 0.0, "pct": 0.0})
-
-        # 2. 调用高级 AI 研判
-        ai_result = await generate_advanced_highlights(
-            code=code,
-            name=indicators.get("name", "加载中..."),
-            indicators=indicators,
-            news=news,
-            announcements=raw_ann,
-            hotness=hotness,
-            price_info=stock_p
-        )
-
-        # 3. 结果合并与降级
-        if not ai_result or "highlights" not in ai_result:
-            ai_result = await generate_rule_based_highlights(code, raw_ann)
-
-        # 4. 计算雷达图分数
-        risks = [h for h in ai_result["highlights"] if h["side"] == "risk"]
-        positives = [h for h in ai_result["highlights"] if h["side"] == "positive"]
-        sentiment_label = ai_result.get("summary", {}).get("sentiment", "neutral")
-        
-        # 5. 组装最终响应
-        return HighlightsResponse(
-            stock={"code": code, "name": indicators.get("name", "未命名"), "industry": indicators.get("industry", "A股")},
-            summary={
-                "riskCount": len(risks),
-                "positiveCount": len(positives),
-                "sentiment": sentiment_label,
-                "confidence": ai_result.get("summary", {}).get("confidence", 70)
-            },
-            marketImpression=ai_result["marketImpression"],
-            headline=ai_result.get("headline", "智能透视分析完成"),
-            price=stock_p["price"],
-            pctChange=stock_p["pct"],
-            outlook=ai_result["outlook"],
-            highlights=ai_result["highlights"],
-            liveNews=news,
-            radar=[
-                {"k": "人气值", "v": hotness.get("popularity", 50)},
-                {"k": "指标评分", "v": indicators.get("score", 60)},
-                {"k": "风险敞口", "v": min(len(risks) * 20, 100)},
-                {"k": "亮点密度", "v": min(len(positives) * 20, 100)},
-                {"k": "研报可信度", "v": ai_result.get("summary", {}).get("confidence", 80)}
-            ]
-        )
-    except Exception as e:
-        import logging
-        logging.error(f"Highlight generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/stocks/{code}/history")
-async def get_stock_history(code: str):
-    # 返回空列表以防止前端崩溃，后续可对接真实数据库
-    return []
-
-@router.get("/stocks/{code}/snapshots")
-async def get_stock_snapshots(code: str):
-    return []
-
-@router.post("/stocks/{code}/snapshots")
-async def save_stock_snapshot(code: str, data: dict):
-    return {"status": "success", "id": "local_snap_001"}
+async def get_highlights_legacy(code: str = Query(..., pattern=r"^\d{6}$")):
+    return _build_highlights_response(code)

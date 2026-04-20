@@ -57,26 +57,12 @@ class RadarPoint(BaseModel):
     v: float = Field(ge=0, le=100)
 
 
-class StockOutlook(BaseModel):
-    consensus: str = Field(..., description="分析师共识")
-    shortTerm: str = Field(..., description="短期触发剂")
-    valuation: str = Field(..., description="估值变化预期")
-
-
-class MarketImpression(BaseModel):
-    summary: str = Field(..., description="简要总结")
-    positioning: str = Field(..., description="市场定位")
-    attention: str = Field(..., description="投资者关注度")
-
-
 class HighlightsResponse(BaseModel):
     stock: StockInfo
     summary: StockSummary
-    marketImpression: MarketImpression
-    headline: str = Field(..., description="一句话核心结论")
+    marketImpression: str
     price: float
     pctChange: float
-    outlook: StockOutlook
     highlights: List[HighlightItem] = Field(default_factory=list)
     liveNews: List[NewsItem] = Field(default_factory=list)
     radar: List[RadarPoint] = Field(default_factory=list)

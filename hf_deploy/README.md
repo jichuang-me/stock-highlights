@@ -1,12 +1,8 @@
----
-title: Stock Backend
-emoji: 📈
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
+# hf_deploy
 
-# Stock Highlights Real Data Backend
-Multi-source intelligence aggregator for financial data.
+This directory contains the FastAPI application and service modules used by the root Hugging Face Space.
+
+## Important
+- Do not deploy this directory as a standalone Space anymore.
+- The root repository is now the Hugging Face Space source of truth.
+- The root `Dockerfile` builds `frontend/` and serves it through `hf_deploy.app`.

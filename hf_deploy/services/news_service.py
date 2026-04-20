@@ -1,53 +1,60 @@
-import requests
-import aiohttp
+import datetime as dt
 import logging
-from typing import List, Dict, Any
-from ..core.config import USER_AGENT
+import time
+from typing import Any, Dict, List
 
-async def fetch_cls_telegraph_async(code: str) -> List[Dict[str, Any]]:
-    """异步获取财联社电报"""
-    url = "https://www.cls.cn/api/sw?type=telegram"
-    params = {"keyword": code, "page": 1, "os": "web"}
+try:
+    from ..core.config import HTTP_SESSION, REQUEST_TIMEOUT, USER_AGENT
+except ImportError:
+    from core.config import HTTP_SESSION, REQUEST_TIMEOUT, USER_AGENT
+
+
+NEWS_CACHE_TTL = 120
+_news_cache: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
+
+
+def _format_timestamp(value: Any) -> str:
+    if not value:
+        return "未知时间"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=5) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-                items = data.get("data", {}).get("telegram", {}).get("items", [])
-                return [{
-                    "title": it.get("title") or it.get("content")[:50],
-                    "time": it.get("ctime"),
-                    "url": f"https://www.cls.cn/detail/{it.get('id')}"
-                } for it in items[:10]]
-    except Exception as exc:
-        logging.warning("Async CLS fetch failed: %s", exc)
-        return []
+        return dt.datetime.fromtimestamp(int(value)).strftime("%m-%d %H:%M")
+    except (TypeError, ValueError, OSError):
+        return str(value)
+
 
 def fetch_cls_telegraph(code: str) -> List[Dict[str, Any]]:
-    """获取财联社电报 (同步版)"""
-    url = "https://www.cls.cn/api/sw?type=telegram"
-    params = {"keyword": code, "page": 1, "os": "web"}
-    headers = {"User-Agent": USER_AGENT}
+    cached = _news_cache.get(code)
+    now = time.time()
+    if cached and now - cached[0] < NEWS_CACHE_TTL:
+        return cached[1]
+
+    url = "https://www.cls.cn/api/sw"
+    params = {"type": "telegram", "keyword": code, "page": 1, "os": "web"}
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=5)
-        data = resp.json().get("data", {}).get("telegram", {}).get("items", [])
-        return [{
-            "title": it.get("title") or it.get("content")[:50],
-            "time": it.get("ctime"),
-            "url": f"https://www.cls.cn/detail/{it.get('id')}"
-        } for it in data[:10]]
-    except:
+        resp = HTTP_SESSION.get(
+            url,
+            params=params,
+            headers={"User-Agent": USER_AGENT},
+            timeout=REQUEST_TIMEOUT,
+        )
+        items = resp.json().get("data", {}).get("telegram", {}).get("items", [])
+        result = [
+            {
+                "title": item.get("title") or (item.get("content") or "")[:60],
+                "time": _format_timestamp(item.get("ctime")),
+                "url": f"https://www.cls.cn/detail/{item.get('id')}",
+                "source": "财联社电报",
+                "tag": "快讯",
+            }
+            for item in items[:10]
+            if item.get("id")
+        ]
+        _news_cache[code] = (now, result)
+        return result
+    except Exception as exc:
+        logging.error("CLS telegraph fetch failed for %s: %s", code, exc)
         return []
 
-def fetch_sina_news(code: str) -> List[Dict[str, Any]]:
-    """获取新浪个股新闻 (占位)"""
-    return []
-
-async def get_integrated_news_async(code: str) -> List[Dict[str, Any]]:
-    """异步集成新闻源"""
-    return await fetch_cls_telegraph_async(code)
 
 def get_integrated_news(code: str) -> List[Dict[str, Any]]:
-    """集成新闻源 (同步版)"""
     return fetch_cls_telegraph(code)
