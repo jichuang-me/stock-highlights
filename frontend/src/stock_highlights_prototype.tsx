@@ -337,6 +337,15 @@ function getFocusHighlights(highlights: HighlightItem[]) {
   return focus;
 }
 
+function getChainSegment(item: HighlightItem | undefined, prefix: string) {
+  if (!item) {
+    return '';
+  }
+
+  const matched = item.evidenceChain.find((chainItem) => chainItem.startsWith(prefix));
+  return matched ? matched.replace(`${prefix}：`, '').trim() : '';
+}
+
 function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
   if (tone === 'hot') return 'border-red-400/20 bg-red-500/12 text-red-300';
   if (tone === 'warm') return 'border-amber-400/20 bg-amber-500/12 text-amber-300';
@@ -754,6 +763,18 @@ export default function StockHighlightsPrototype() {
     () => sortedHighlights.filter((item) => !focusHighlights.some((focus) => focus.id === item.id)),
     [focusHighlights, sortedHighlights],
   );
+  const primaryFocusHighlight = useMemo(
+    () => [...focusHighlights].sort((left, right) => right.score - left.score)[0],
+    [focusHighlights],
+  );
+  const primaryCurrentKey = useMemo(
+    () => getChainSegment(primaryFocusHighlight, '当前关键'),
+    [primaryFocusHighlight],
+  );
+  const primaryValidation = useMemo(
+    () => getChainSegment(primaryFocusHighlight, '后续验证'),
+    [primaryFocusHighlight],
+  );
 
   const watched = useMemo(
     () => !!selectedStockForList && watchlist.some((item) => item.code === selectedStockForList.code),
@@ -1073,6 +1094,22 @@ export default function StockHighlightsPrototype() {
                             {data.headline || 'AI 尚未生成主线，先看规则看点和快讯。'}
                           </div>
                           <p className="mt-3 text-sm leading-6 text-slate-200">{data.marketImpression}</p>
+                          {primaryCurrentKey || primaryValidation ? (
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              {primaryCurrentKey ? (
+                                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">当前关键证据</div>
+                                  <div className="mt-2 text-sm leading-6 text-slate-100">{primaryCurrentKey}</div>
+                                </div>
+                              ) : null}
+                              {primaryValidation ? (
+                                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">后续验证</div>
+                                  <div className="mt-2 text-sm leading-6 text-slate-100">{primaryValidation}</div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
