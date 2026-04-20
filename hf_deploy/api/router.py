@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 
 from fastapi import APIRouter, Path, Query
@@ -37,7 +38,7 @@ def _rule_sentiment(risk_count: int, positive_count: int) -> str:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.6.0"}
+    return {"status": "ok", "version": "v4.6.1"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -57,15 +58,25 @@ def _build_rule_market_impression(highlights: List[dict], hotness: dict, indicat
     )
 
 
-def _build_highlights_response(code: str) -> HighlightsResponse:
+async def _build_highlights_response(code: str) -> HighlightsResponse:
     prefix = "sh" if code.startswith("6") else "sz"
-    stock_price = fetch_sina_prices(f"{prefix}{code}").get(code, {"price": 0.0, "pct": 0.0})
-    hotness = fetch_xueqiu_hotness(code)
-    indicators = fetch_eastmoney_indicators(code)
-    raw_ann = fetch_announcements(code)
+    (
+        all_prices,
+        hotness,
+        indicators,
+        raw_ann,
+        news,
+        profile,
+    ) = await asyncio.gather(
+        asyncio.to_thread(fetch_sina_prices, f"{prefix}{code}"),
+        asyncio.to_thread(fetch_xueqiu_hotness, code),
+        asyncio.to_thread(fetch_eastmoney_indicators, code),
+        asyncio.to_thread(fetch_announcements, code),
+        asyncio.to_thread(get_integrated_news, code),
+        asyncio.to_thread(get_stock_profile, code),
+    )
+    stock_price = all_prices.get(code, {"price": 0.0, "pct": 0.0})
     highlights = analyze_highlights(raw_ann)
-    news = get_integrated_news(code)
-    profile = get_stock_profile(code)
 
     company_name = raw_ann[0].get("secName") if raw_ann else profile["name"]
     industry = profile["industry"] or None
@@ -74,7 +85,8 @@ def _build_highlights_response(code: str) -> HighlightsResponse:
     positives = [item for item in highlights if item["side"] == "positive"]
     sentiment = _rule_sentiment(len(risks), len(positives))
 
-    ai_summary = generate_ai_summary(
+    ai_summary = await asyncio.to_thread(
+        generate_ai_summary,
         code=code,
         name=company_name or code,
         indicators=indicators,
@@ -125,9 +137,9 @@ def _build_highlights_response(code: str) -> HighlightsResponse:
 
 @router.get("/stocks/{code}/highlights", response_model=HighlightsResponse)
 async def get_stock_highlights(code: str = Path(..., pattern=r"^\d{6}$")):
-    return _build_highlights_response(code)
+    return await _build_highlights_response(code)
 
 
 @router.get("/highlights", response_model=HighlightsResponse, include_in_schema=False)
 async def get_highlights_legacy(code: str = Query(..., pattern=r"^\d{6}$")):
-    return _build_highlights_response(code)
+    return await _build_highlights_response(code)
