@@ -2,19 +2,23 @@ import type { AnalysisProfile, SearchStock, StockHighlightsResponse } from './ty
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+function encodeHeaderValue(value?: string) {
+  return encodeURIComponent(value || '');
+}
+
 function buildAnalysisHeaders(profile?: AnalysisProfile | null) {
   if (!profile) {
     return {};
   }
 
   return {
-    'X-AI-Profile-Label': profile.label,
-    'X-AI-Profile-Kind': profile.kind,
-    'X-AI-Profile-Mode': profile.mode,
-    'X-AI-Profile-Vendor': profile.vendor,
-    'X-AI-Profile-Model': profile.model,
-    'X-AI-Profile-Base-Url': profile.baseUrl || '',
-    'X-AI-Profile-Api-Key': profile.apiKey || '',
+    'X-AI-Profile-Label': encodeHeaderValue(profile.label),
+    'X-AI-Profile-Kind': encodeHeaderValue(profile.kind),
+    'X-AI-Profile-Mode': encodeHeaderValue(profile.mode),
+    'X-AI-Profile-Vendor': encodeHeaderValue(profile.vendor),
+    'X-AI-Profile-Model': encodeHeaderValue(profile.model),
+    'X-AI-Profile-Base-Url': encodeHeaderValue(profile.baseUrl || ''),
+    'X-AI-Profile-Api-Key': encodeHeaderValue(profile.apiKey || ''),
   };
 }
 

@@ -1,5 +1,6 @@
 import asyncio
 from typing import Dict, List, Optional
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Path, Query, Request
 
@@ -37,21 +38,24 @@ def _rule_sentiment(risk_count: int, positive_count: int) -> str:
 
 
 def _extract_ai_profile(request: Request) -> Optional[Dict[str, str]]:
-    mode = (request.headers.get("X-AI-Profile-Mode") or "").strip()
-    vendor = (request.headers.get("X-AI-Profile-Vendor") or "").strip()
-    model = (request.headers.get("X-AI-Profile-Model") or "").strip()
+    def decode(name: str) -> str:
+        return unquote((request.headers.get(name) or "").strip())
+
+    mode = decode("X-AI-Profile-Mode")
+    vendor = decode("X-AI-Profile-Vendor")
+    model = decode("X-AI-Profile-Model")
 
     if not mode and not vendor and not model:
         return None
 
     return {
         "mode": mode or "server",
-        "label": (request.headers.get("X-AI-Profile-Label") or "").strip() or "系统默认",
-        "kind": (request.headers.get("X-AI-Profile-Kind") or "").strip() or "api",
+        "label": decode("X-AI-Profile-Label") or "系统默认",
+        "kind": decode("X-AI-Profile-Kind") or "api",
         "vendor": vendor,
         "model": model,
-        "baseUrl": (request.headers.get("X-AI-Profile-Base-Url") or "").strip(),
-        "apiKey": (request.headers.get("X-AI-Profile-Api-Key") or "").strip(),
+        "baseUrl": decode("X-AI-Profile-Base-Url"),
+        "apiKey": decode("X-AI-Profile-Api-Key"),
     }
 
 

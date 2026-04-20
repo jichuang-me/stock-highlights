@@ -2,10 +2,10 @@ import { startTransition, useEffect, useMemo, useState, type FormEvent } from 'r
 import {
   AlertTriangle,
   Bot,
-  BrainCircuit,
   ExternalLink,
   Flame,
   Heart,
+  HelpCircle,
   History,
   Loader2,
   RefreshCcw,
@@ -644,6 +644,7 @@ export default function StockHighlightsPrototype() {
   const [recentStocks, setRecentStocks] = useState<SearchStock[]>([]);
   const [watchlist, setWatchlist] = useState<SearchStock[]>([]);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(DEFAULT_MODEL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState(DEFAULT_MODEL_PROFILES[0].id);
 
@@ -795,50 +796,21 @@ export default function StockHighlightsPrototype() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
           <section className="space-y-6">
-            <div className="space-y-4 rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_35%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-7">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge className="border-cyan-400/20 bg-cyan-400/10 text-cyan-300">AI 个股短线终端</Badge>
-                <Badge className="border-white/10 bg-white/5 text-slate-300">单 Space 低成本部署</Badge>
-              </div>
-              <div className="space-y-3">
-                <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-                  聚焦实时驱动与当前情绪，直接回答这只票短线该看什么。
-                </h1>
-                <p className="max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
-                  不是做大而全资讯页，而是把公告、快讯、热度和 AI 判断压成一个短线驾驶舱。
-                  先看主线和情绪位置，再看驱动证据、风险点和实时消息。
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-                  <div className="flex items-center gap-2 text-sm text-cyan-300">
-                    <BrainCircuit className="h-4 w-4" />
-                    AI 结论先行
-                  </div>
-                  <div className="mt-3 text-sm leading-6 text-slate-300">
-                    首屏先回答短线主线、情绪位置和失效风险，不让你先翻半天资讯。
-                  </div>
-                </div>
-                <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-                  <div className="flex items-center gap-2 text-sm text-red-300">
-                    <Flame className="h-4 w-4" />
-                    情绪比信息更重要
-                  </div>
-                  <div className="mt-3 text-sm leading-6 text-slate-300">
-                    重点看是否在发酵、高潮、分歧还是退潮，而不是只看消息数量。
-                  </div>
-                </div>
-                <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-                  <div className="flex items-center gap-2 text-sm text-amber-300">
-                    <Zap className="h-4 w-4" />
-                    模型可替换
-                  </div>
-                  <div className="mt-3 text-sm leading-6 text-slate-300">
-                    你可以选系统模型，也可以挂自己的免费、API 或可访问本地端点。
-                  </div>
+            <div className="flex items-center justify-between rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,6,23,0.96))] px-5 py-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <Badge className="border-cyan-400/20 bg-cyan-400/10 text-cyan-300">短线终端</Badge>
+                  <div className="text-xl font-semibold tracking-tight text-white">AI 个股短线看点</div>
                 </div>
               </div>
+              <button
+                type="button"
+                aria-label="查看说明"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-white/20 hover:text-white"
+                onClick={() => setHelpOpen(true)}
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
             </div>
 
             <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
@@ -972,10 +944,6 @@ export default function StockHighlightsPrototype() {
               <CardHeader className="space-y-3">
                 <div className="text-xs uppercase tracking-[0.22em] text-slate-500">当前默认模型</div>
                 <div className="text-2xl font-semibold">{activeProfile.label}</div>
-                <div className="text-sm leading-6 text-slate-400">
-                  {activeProfile.note ||
-                    '你可以在这里切换服务端模型，或挂自己的 API / 可访问本地端点。'}
-                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
@@ -994,19 +962,6 @@ export default function StockHighlightsPrototype() {
                   <Settings2 className="mr-2 h-4 w-4" />
                   打开模型工作台
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-              <CardHeader className="space-y-3">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-500">产品原则</div>
-                <div className="text-2xl font-semibold">只做短线真正要看的东西</div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                <div>1. 先看主线和情绪，再看细节。</div>
-                <div>2. 强调实时、当前阶段和市场是否继续买单。</div>
-                <div>3. AI 要给判断，不是复读资讯。</div>
-                <div>4. 布局高密度但不拥挤，优先把核心结论放到首屏。</div>
               </CardContent>
             </Card>
           </aside>
@@ -1453,6 +1408,24 @@ export default function StockHighlightsPrototype() {
       </div>
 
       <HighlightDetailsDialog item={activeHighlight} onClose={() => setActiveHighlight(null)} />
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="rounded-3xl border-slate-200 bg-white sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>使用说明</DialogTitle>
+            <DialogDescription>
+              这个应用只服务短线观察，不追求做成大而全的资讯门户。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm leading-7 text-slate-700">
+            <div>1. 先看主线和情绪，再看细节。</div>
+            <div>2. 重点关注实时驱动、当前阶段和市场是否继续买单。</div>
+            <div>3. AI 要给判断，不是复读资讯。</div>
+            <div>4. 模型可以切换，也可以添加你自己的 OpenAI 兼容端点。</div>
+            <div>5. 如果使用本地模型，请提供当前 Hugging Face Space 可以访问到的地址，而不是电脑本机的 localhost。</div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ModelManagerDialog
         open={modelDialogOpen}
