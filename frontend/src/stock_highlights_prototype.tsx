@@ -2,6 +2,7 @@ import { startTransition, useEffect, useMemo, useState, type FormEvent } from 'r
 import {
   AlertTriangle,
   Bot,
+  ChevronDown,
   ExternalLink,
   Flame,
   Heart,
@@ -88,6 +89,7 @@ const DEFAULT_MODEL_PROFILES: AnalysisProfile[] = [
 ];
 
 const DEFAULT_MODEL_PROFILE_IDS = new Set(DEFAULT_MODEL_PROFILES.map((profile) => profile.id));
+const STICKY_HEADER_OFFSET = 'top-[156px]';
 
 function sanitizeSavedProfiles(profiles: AnalysisProfile[]) {
   return profiles.filter((profile) => {
@@ -917,6 +919,8 @@ export default function StockHighlightsPrototype() {
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [aiInsightOpen, setAiInsightOpen] = useState(false);
+  const [watchlistExpanded, setWatchlistExpanded] = useState(true);
+  const [recentExpanded, setRecentExpanded] = useState(true);
   const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(DEFAULT_MODEL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState(DEFAULT_MODEL_PROFILES[0].id);
 
@@ -1104,7 +1108,7 @@ export default function StockHighlightsPrototype() {
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <div className="grid gap-4">
           <section className="space-y-4">
-            <div className="flex items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,6,23,0.96))] px-4 py-3">
+            <div className="sticky top-0 z-40 flex items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] px-4 py-3 backdrop-blur">
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <Badge className="border-cyan-400/20 bg-cyan-400/10 text-cyan-300">短线终端</Badge>
@@ -1121,19 +1125,12 @@ export default function StockHighlightsPrototype() {
               </button>
             </div>
 
-            <Card className="rounded-[24px] border-white/10 bg-white/[0.03] text-white shadow-none">
+            <Card className="sticky top-[61px] z-30 rounded-[24px] border-white/10 bg-[rgba(6,8,22,0.92)] text-white shadow-none backdrop-blur">
               <CardContent className="space-y-3 p-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="rounded-2xl bg-cyan-400/15 p-2 text-cyan-300">
+                <form className="flex items-center gap-3" onSubmit={handleSubmit}>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-cyan-400/10 text-cyan-300">
                     <Search className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">快速搜股</div>
-                    <div className="text-[11px] text-slate-500">代码、名称、拼音缩写</div>
-                  </div>
-                </div>
-
-                <form className="flex" onSubmit={handleSubmit}>
                   <Input
                     className="h-10 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
                     placeholder="输入股票代码或简称，例如 600519、贵州茅台"
@@ -1144,46 +1141,60 @@ export default function StockHighlightsPrototype() {
 
                 {watchlist.length > 0 ? (
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 text-[11px] text-slate-500 transition hover:text-slate-300"
+                      onClick={() => setWatchlistExpanded((current) => !current)}
+                    >
                       <Heart className="h-3.5 w-3.5" />
                       自选观察
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {watchlist.map((stock) => (
-                        <Button
-                          key={stock.code}
-                          type="button"
-                          variant="outline"
-                          className="h-8 rounded-2xl border-white/10 bg-slate-950 px-3 text-slate-200 hover:bg-slate-900"
-                          onClick={() => handleSelectStock(stock)}
-                        >
-                          <Star className="mr-1.5 h-3.5 w-3.5 fill-current text-amber-300" />
-                          {stock.name} {stock.code}
-                        </Button>
-                      ))}
-                    </div>
+                      <ChevronDown className={`h-3.5 w-3.5 transition ${watchlistExpanded ? '' : '-rotate-90'}`} />
+                    </button>
+                    {watchlistExpanded ? (
+                      <div className="flex flex-wrap gap-2">
+                        {watchlist.map((stock) => (
+                          <Button
+                            key={stock.code}
+                            type="button"
+                            variant="outline"
+                            className="h-8 rounded-2xl border-white/10 bg-slate-950 px-3 text-slate-200 hover:bg-slate-900"
+                            onClick={() => handleSelectStock(stock)}
+                          >
+                            <Star className="mr-1.5 h-3.5 w-3.5 fill-current text-amber-300" />
+                            {stock.name} {stock.code}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
                 {recentStocks.length > 0 ? (
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 text-[11px] text-slate-500 transition hover:text-slate-300"
+                      onClick={() => setRecentExpanded((current) => !current)}
+                    >
                       <History className="h-3.5 w-3.5" />
                       最近查看
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {recentStocks.map((stock) => (
-                        <Button
-                          key={stock.code}
-                          type="button"
-                          variant="outline"
-                          className="h-8 rounded-2xl border-white/10 bg-slate-950 px-3 text-slate-200 hover:bg-slate-900"
-                          onClick={() => handleSelectStock(stock)}
-                        >
-                          {stock.name} {stock.code}
-                        </Button>
-                      ))}
-                    </div>
+                      <ChevronDown className={`h-3.5 w-3.5 transition ${recentExpanded ? '' : '-rotate-90'}`} />
+                    </button>
+                    {recentExpanded ? (
+                      <div className="flex flex-wrap gap-2">
+                        {recentStocks.map((stock) => (
+                          <Button
+                            key={stock.code}
+                            type="button"
+                            variant="outline"
+                            className="h-8 rounded-2xl border-white/10 bg-slate-950 px-3 text-slate-200 hover:bg-slate-900"
+                            onClick={() => handleSelectStock(stock)}
+                          >
+                            {stock.name} {stock.code}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1257,7 +1268,9 @@ export default function StockHighlightsPrototype() {
               <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
                 <section className="space-y-6">
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-4 border-b border-white/10 pb-4">
+                    <CardHeader
+                      className={`sticky ${STICKY_HEADER_OFFSET} z-20 space-y-4 rounded-t-[30px] border-b border-white/10 bg-[rgba(10,14,30,0.94)] pb-4 backdrop-blur`}
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-3">
@@ -1413,7 +1426,9 @@ export default function StockHighlightsPrototype() {
                   </Card>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                    <CardHeader
+                      className={`sticky ${STICKY_HEADER_OFFSET} z-20 space-y-3 rounded-t-[30px] border-b border-white/10 bg-[rgba(10,14,30,0.94)] pb-5 backdrop-blur`}
+                    >
                       <div className="flex items-center gap-3">
                         <Flame className="h-5 w-5 text-red-300" />
                         <div>
@@ -1481,7 +1496,9 @@ export default function StockHighlightsPrototype() {
                   </Card>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                    <CardHeader
+                      className={`sticky ${STICKY_HEADER_OFFSET} z-20 space-y-3 rounded-t-[30px] border-b border-white/10 bg-[rgba(10,14,30,0.94)] pb-5 backdrop-blur`}
+                    >
                       <div className="flex items-center gap-3">
                         <Sparkles className="h-5 w-5 text-cyan-300" />
                         <div>
@@ -1545,7 +1562,9 @@ export default function StockHighlightsPrototype() {
 
                 <section className="space-y-6">
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                    <CardHeader
+                      className={`sticky ${STICKY_HEADER_OFFSET} z-20 space-y-3 rounded-t-[30px] border-b border-white/10 bg-[rgba(10,14,30,0.94)] pb-5 backdrop-blur`}
+                    >
                       <div className="flex items-center gap-3">
                         {data.pctChange >= 0 ? (
                           <TrendingUp className="h-5 w-5 text-red-300" />
@@ -1581,7 +1600,9 @@ export default function StockHighlightsPrototype() {
                   </Card>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                    <CardHeader
+                      className={`sticky ${STICKY_HEADER_OFFSET} z-20 space-y-3 rounded-t-[30px] border-b border-white/10 bg-[rgba(10,14,30,0.94)] pb-5 backdrop-blur`}
+                    >
                       <div className="flex items-center gap-3">
                         <Zap className="h-5 w-5 text-amber-300" />
                         <div>
