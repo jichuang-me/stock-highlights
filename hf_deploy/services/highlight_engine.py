@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from ..services.announcement_service import build_pdf_url
@@ -59,7 +59,7 @@ EVENT_CATALOG = {
 }
 
 
-def _match_event(title: str) -> tuple[str, Dict[str, Any]] | tuple[None, None]:
+def _match_event(title: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
     for event_key, meta in EVENT_CATALOG.items():
         if any(keyword in title for keyword in meta["keywords"]):
             return event_key, meta
