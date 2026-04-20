@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query
 
 try:
     from ..models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
-    from ..services.ai_analyst import get_cached_ai_summary, queue_ai_summary
+    from ..services.ai_analyst import get_cached_ai_summary, invalidate_ai_summary_cache, queue_ai_summary
     from ..services.announcement_service import fetch_announcements
     from ..services.highlight_engine import analyze_highlights
     from ..services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
@@ -13,7 +13,7 @@ try:
     from ..services.search_service import get_stock_profile, search_stock_enhanced
 except ImportError:
     from models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
-    from services.ai_analyst import get_cached_ai_summary, queue_ai_summary
+    from services.ai_analyst import get_cached_ai_summary, invalidate_ai_summary_cache, queue_ai_summary
     from services.announcement_service import fetch_announcements
     from services.highlight_engine import analyze_highlights
     from services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
@@ -58,7 +58,7 @@ def _build_rule_market_impression(highlights: List[dict], hotness: dict, indicat
     )
 
 
-async def _build_highlights_response(code: str) -> HighlightsResponse:
+async def _build_highlights_response(code: str, refresh: bool = False) -> HighlightsResponse:
     prefix = "sh" if code.startswith("6") else "sz"
     (
         all_prices,
@@ -102,13 +102,19 @@ async def _build_highlights_response(code: str) -> HighlightsResponse:
         price_info=stock_price,
     )
 
+    if refresh:
+        await asyncio.to_thread(invalidate_ai_summary_cache, cache_key)
+        ai_summary = None
+
     if ai_summary:
         market_impression = ai_summary["marketImpression"]
         headline = ai_summary["headline"]
         sentiment = ai_summary.get("sentiment", sentiment)
         analysis_mode = "ai"
         analysis_model = ai_summary.get("model")
+        analysis_updated_at = ai_summary.get("updatedAt")
     else:
+        analysis_updated_at = None
         analysis_pending = await asyncio.to_thread(
             queue_ai_summary,
             cache_key,
@@ -141,6 +147,7 @@ async def _build_highlights_response(code: str) -> HighlightsResponse:
         analysisMode=analysis_mode,
         analysisPending=analysis_pending,
         analysisModel=analysis_model,
+        analysisUpdatedAt=analysis_updated_at,
         price=float(stock_price["price"]),
         pctChange=float(stock_price["pct"]),
         highlights=highlights,
@@ -150,10 +157,13 @@ async def _build_highlights_response(code: str) -> HighlightsResponse:
 
 
 @router.get("/stocks/{code}/highlights", response_model=HighlightsResponse)
-async def get_stock_highlights(code: str = Path(..., pattern=r"^\d{6}$")):
-    return await _build_highlights_response(code)
+async def get_stock_highlights(
+    code: str = Path(..., pattern=r"^\d{6}$"),
+    refresh: bool = Query(False),
+):
+    return await _build_highlights_response(code, refresh=refresh)
 
 
 @router.get("/highlights", response_model=HighlightsResponse, include_in_schema=False)
-async def get_highlights_legacy(code: str = Query(..., pattern=r"^\d{6}$")):
-    return await _build_highlights_response(code)
+async def get_highlights_legacy(code: str = Query(..., pattern=r"^\d{6}$"), refresh: bool = Query(False)):
+    return await _build_highlights_response(code, refresh=refresh)

@@ -58,6 +58,7 @@ export type StockHighlightsResponse = {
   analysisMode: 'ai' | 'rules';
   analysisPending: boolean;
   analysisModel?: string | null;
+  analysisUpdatedAt?: string | null;
   price: number;
   pctChange: number;
   highlights: HighlightItem[];

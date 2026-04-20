@@ -1,9 +1,11 @@
-import { startTransition, useMemo, useState, type FormEvent } from 'react';
+import { startTransition, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
   Bot,
   ExternalLink,
+  History,
   Loader2,
+  RefreshCcw,
   Search,
   ShieldAlert,
   Sparkles,
@@ -24,6 +26,8 @@ import {
   DialogTitle,
 } from './components/ui/dialog';
 import { Input } from './components/ui/input';
+
+const RECENT_STOCKS_KEY = 'stock-highlights:recent-stocks';
 
 const sideMeta = {
   risk: {
@@ -154,9 +158,25 @@ export default function StockHighlightsPrototype() {
   const [query, setQuery] = useState('');
   const [selectedStock, setSelectedStock] = useState<SearchStock | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<HighlightItem | null>(null);
+  const [recentStocks, setRecentStocks] = useState<SearchStock[]>([]);
 
   const { results, loading: searchLoading, error: searchError } = useStockSearch(query);
-  const { data, loading, error } = useStockHighlights(selectedStock?.code ?? '');
+  const { data, loading, error, refreshAnalysis } = useStockHighlights(selectedStock?.code ?? '');
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(RECENT_STOCKS_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as SearchStock[];
+      if (Array.isArray(parsed)) {
+        setRecentStocks(parsed.slice(0, 6));
+      }
+    } catch {
+      window.localStorage.removeItem(RECENT_STOCKS_KEY);
+    }
+  }, []);
 
   const displayStock = useMemo(() => {
     if (!selectedStock && !data) {
@@ -179,10 +199,19 @@ export default function StockHighlightsPrototype() {
     [data?.highlights],
   );
 
+  const persistRecentStocks = (nextStock: SearchStock) => {
+    setRecentStocks((current) => {
+      const next = [nextStock, ...current.filter((item) => item.code !== nextStock.code)].slice(0, 6);
+      window.localStorage.setItem(RECENT_STOCKS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const handleSelectStock = (stock: SearchStock) => {
     startTransition(() => {
       setSelectedStock(stock);
       setQuery(`${stock.code} ${stock.name}`);
+      persistRecentStocks(stock);
     });
   };
 
@@ -230,6 +259,28 @@ export default function StockHighlightsPrototype() {
                 查询
               </Button>
             </form>
+
+            {recentStocks.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <History className="h-4 w-4" />
+                  最近查看
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {recentStocks.map((stock) => (
+                    <Button
+                      key={stock.code}
+                      type="button"
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                      onClick={() => handleSelectStock(stock)}
+                    >
+                      {stock.name} {stock.code}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(searchLoading || results.length > 0 || searchError) && (
               <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-3">
@@ -354,14 +405,24 @@ export default function StockHighlightsPrototype() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <p className="text-sm leading-6 text-slate-300">{data.marketImpression}</p>
-                      {data.analysisPending ? (
-                        <div className="text-xs text-cyan-300">
-                          已先返回规则结果，AI 总结生成后会自动刷新。
-                        </div>
-                      ) : null}
-                      {data.analysisModel ? (
-                        <div className="text-xs text-slate-500">模型来源：{data.analysisModel}</div>
-                      ) : null}
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        {data.analysisModel ? <span>模型来源：{data.analysisModel}</span> : null}
+                        {data.analysisUpdatedAt ? <span>更新时间：{data.analysisUpdatedAt}</span> : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {data.analysisPending ? (
+                          <div className="text-xs text-cyan-300">已先返回规则结果，AI 总结生成后会自动刷新。</div>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                          onClick={() => void refreshAnalysis()}
+                        >
+                          <RefreshCcw className="mr-2 h-4 w-4" />
+                          重算 AI
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
 

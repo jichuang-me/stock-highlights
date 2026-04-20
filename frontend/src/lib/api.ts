@@ -20,6 +20,10 @@ export function searchStocks(query: string, signal?: AbortSignal) {
   return apiRequest<SearchStock[]>(`/api/stocks/search?q=${encodeURIComponent(query)}`, signal);
 }
 
-export function getStockHighlights(code: string, signal?: AbortSignal) {
-  return apiRequest<StockHighlightsResponse>(`/api/stocks/${encodeURIComponent(code)}/highlights`, signal);
+export function getStockHighlights(code: string, signal?: AbortSignal, refresh = false) {
+  const suffix = refresh ? '?refresh=true' : '';
+  return apiRequest<StockHighlightsResponse>(
+    `/api/stocks/${encodeURIComponent(code)}/highlights${suffix}`,
+    signal,
+  );
 }

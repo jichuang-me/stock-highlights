@@ -1,3 +1,4 @@
+import datetime as dt
 import hashlib
 import json
 import logging
@@ -128,6 +129,10 @@ def _normalize_result(result: Dict[str, Any], vendor: str, model: str) -> Option
     }
 
 
+def _format_timestamp(timestamp: float) -> str:
+    return dt.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _build_context(
     code: str,
     name: str,
@@ -167,6 +172,7 @@ def _run_ai_summary(key: str, context: Dict[str, Any]) -> None:
                     continue
                 result = _normalize_result(raw, vendor, model)
                 if result:
+                    result["updatedAt"] = _format_timestamp(time.time())
                     with _analysis_lock:
                         _analysis_cache[key] = (time.time(), result)
                     return
@@ -225,3 +231,8 @@ def queue_ai_summary(
     thread = threading.Thread(target=_run_ai_summary, args=(key, context), daemon=True)
     thread.start()
     return True
+
+
+def invalidate_ai_summary_cache(key: str) -> None:
+    with _analysis_lock:
+        _analysis_cache.pop(key, None)

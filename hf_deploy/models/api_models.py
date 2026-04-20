@@ -65,6 +65,7 @@ class HighlightsResponse(BaseModel):
     analysisMode: Literal["ai", "rules"] = "rules"
     analysisPending: bool = False
     analysisModel: Optional[str] = None
+    analysisUpdatedAt: Optional[str] = None
     price: float
     pctChange: float
     highlights: List[HighlightItem] = Field(default_factory=list)

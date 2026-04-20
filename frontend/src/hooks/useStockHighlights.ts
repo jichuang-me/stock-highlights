@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getStockHighlights } from '../lib/api';
 import type { StockHighlightsResponse } from '../lib/types';
@@ -16,32 +16,32 @@ export function useStockHighlights(code: string) {
     error: '',
   });
   const pollTimerRef = useRef<number | null>(null);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    if (!code) {
-      setState({ data: null, loading: false, error: '' });
-      if (pollTimerRef.current) {
-        window.clearTimeout(pollTimerRef.current);
-      }
-      return;
+  const clearPoll = useCallback(() => {
+    if (pollTimerRef.current) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
     }
+  }, []);
 
-    const controller = new AbortController();
-
-    const clearPoll = () => {
-      if (pollTimerRef.current) {
-        window.clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = null;
+  const load = useCallback(
+    async (options?: { isInitial?: boolean; refresh?: boolean }) => {
+      if (!code) {
+        return;
       }
-    };
 
-    const load = async (isInitial: boolean) => {
-      if (isInitial) {
+      const { isInitial = false, refresh = false } = options ?? {};
+      activeControllerRef.current?.abort();
+      const controller = new AbortController();
+      activeControllerRef.current = controller;
+
+      if (isInitial || refresh) {
         setState((current) => ({ ...current, loading: true, error: '' }));
       }
 
       try {
-        const data = await getStockHighlights(code, controller.signal);
+        const data = await getStockHighlights(code, controller.signal, refresh);
         if (controller.signal.aborted) {
           return;
         }
@@ -50,7 +50,7 @@ export function useStockHighlights(code: string) {
 
         if (data.analysisPending) {
           pollTimerRef.current = window.setTimeout(() => {
-            void load(false);
+            void load();
           }, 4000);
         }
       } catch (err) {
@@ -64,15 +64,31 @@ export function useStockHighlights(code: string) {
           error: err instanceof Error ? err.message : '加载失败',
         });
       }
-    };
+    },
+    [clearPoll, code],
+  );
 
-    void load(true);
+  useEffect(() => {
+    if (!code) {
+      setState({ data: null, loading: false, error: '' });
+      clearPoll();
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
+      return;
+    }
+
+    void load({ isInitial: true });
 
     return () => {
-      controller.abort();
+      activeControllerRef.current?.abort();
       clearPoll();
     };
-  }, [code]);
+  }, [clearPoll, code, load]);
 
-  return state;
+  const refreshAnalysis = useCallback(async () => {
+    clearPoll();
+    await load({ refresh: true });
+  }, [clearPoll, load]);
+
+  return { ...state, refreshAnalysis };
 }
