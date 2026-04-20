@@ -793,10 +793,10 @@ export default function StockHighlightsPrototype() {
 
   return (
     <div className="min-h-screen bg-[#060816] text-white">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-6">
-          <section className="space-y-6">
-            <div className="flex items-center justify-between rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,6,23,0.96))] px-5 py-4">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+        <div className="grid gap-4">
+          <section className="space-y-4">
+            <div className="flex items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,6,23,0.96))] px-4 py-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <Badge className="border-cyan-400/20 bg-cyan-400/10 text-cyan-300">短线终端</Badge>
@@ -813,15 +813,15 @@ export default function StockHighlightsPrototype() {
               </button>
             </div>
 
-            <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-              <CardHeader className="flex flex-col gap-4 border-b border-white/10 pb-5 md:flex-row md:items-start md:justify-between">
+            <Card className="rounded-[26px] border-white/10 bg-white/[0.03] text-white shadow-none">
+              <CardHeader className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-cyan-400/15 p-3 text-cyan-300">
-                    <Search className="h-5 w-5" />
+                  <div className="rounded-2xl bg-cyan-400/15 p-2.5 text-cyan-300">
+                    <Search className="h-4.5 w-4.5" />
                   </div>
                   <div>
-                    <div className="text-lg font-semibold">快速搜股</div>
-                    <div className="text-sm text-slate-400">支持代码、名称和拼音缩写</div>
+                    <div className="text-base font-semibold">快速搜股</div>
+                    <div className="text-xs text-slate-400">代码、名称、拼音缩写</div>
                   </div>
                 </div>
 
@@ -838,24 +838,24 @@ export default function StockHighlightsPrototype() {
                 </button>
               </CardHeader>
 
-              <CardContent className="space-y-5 pt-6">
+              <CardContent className="space-y-4 pt-4">
                 <form className="flex flex-col gap-3 md:flex-row" onSubmit={handleSubmit}>
                   <Input
-                    className="h-12 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
+                    className="h-11 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
                     placeholder="输入股票代码或简称，例如 600519、贵州茅台"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
-                  <Button className="h-12 rounded-2xl bg-cyan-400 text-slate-950 hover:bg-cyan-300" type="submit">
+                  <Button className="h-11 rounded-2xl bg-cyan-400 text-slate-950 hover:bg-cyan-300" type="submit">
                     {searchLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     查询
                   </Button>
                 </form>
 
                 {watchlist.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
-                      <Heart className="h-4 w-4" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <Heart className="h-3.5 w-3.5" />
                       自选观察
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -876,9 +876,9 @@ export default function StockHighlightsPrototype() {
                 ) : null}
 
                 {recentStocks.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
-                      <History className="h-4 w-4" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <History className="h-3.5 w-3.5" />
                       最近查看
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -898,7 +898,7 @@ export default function StockHighlightsPrototype() {
                 ) : null}
 
                 {(searchLoading || results.length > 0 || searchError) && (
-                  <div className="rounded-3xl border border-white/10 bg-slate-950/90 p-3">
+                  <div className="rounded-3xl border border-white/10 bg-slate-950/90 p-2.5">
                     {searchLoading ? <div className="text-sm text-slate-400">正在获取候选股票...</div> : null}
                     {!searchLoading && searchError ? <div className="text-sm text-red-300">{searchError}</div> : null}
                     {!searchLoading && !searchError && results.length === 0 && query.trim() ? (
@@ -939,15 +939,15 @@ export default function StockHighlightsPrototype() {
         </div>
 
         {!selectedStock ? (
-          <Card className="mt-8 rounded-[30px] border-dashed border-white/10 bg-transparent text-white shadow-none">
-            <CardContent className="py-16 text-center text-slate-400">
+          <Card className="mt-6 rounded-[26px] border-dashed border-white/10 bg-transparent text-white shadow-none">
+            <CardContent className="py-10 text-center text-sm text-slate-400">
               先选择一只股票，再看 AI 结论、情绪位置、核心驱动和实时快讯。
             </CardContent>
           </Card>
         ) : null}
 
         {selectedStock ? (
-          <div className="mt-8 space-y-8">
+          <div className="mt-6 space-y-6">
             {loading ? (
               <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
                 <CardContent className="flex items-center gap-3 py-10 text-slate-300">
