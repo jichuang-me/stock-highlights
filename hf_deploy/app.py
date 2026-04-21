@@ -6,9 +6,13 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 try:
-    from .api.router import router
-    from .core.config import CORS_ALLOW_ORIGINS, PORT
-except ImportError:
+    if __package__:
+        from .api.router import router
+        from .core.config import CORS_ALLOW_ORIGINS, PORT
+    else:
+        from hf_deploy.api.router import router
+        from hf_deploy.core.config import CORS_ALLOW_ORIGINS, PORT
+except ModuleNotFoundError:
     from api.router import router
     from core.config import CORS_ALLOW_ORIGINS, PORT
 
