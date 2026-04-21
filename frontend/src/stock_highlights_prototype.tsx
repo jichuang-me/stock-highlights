@@ -352,6 +352,58 @@ function getNextTriggers(data: StockHighlightsResponse, highlights: HighlightIte
   return triggers.slice(0, 3);
 }
 
+function getTurningPointGroups(data: StockHighlightsResponse, highlights: HighlightItem[]) {
+  const topPositive = highlights.filter((item) => item.side === 'positive').slice(0, 2);
+  const topRisk = highlights.filter((item) => item.side === 'risk').slice(0, 2);
+
+  const upgrade: string[] = [];
+  const downgrade: string[] = [];
+  const invalidation: string[] = [];
+
+  topPositive.forEach((item) => {
+    upgrade.push(`如果 ${item.label} 出现后续公告、快讯或板块联动，主线大概率升级。`);
+  });
+
+  if (data.pctChange > 0) {
+    upgrade.push('如果价格继续红盘放量并维持承接，短线预期会更容易从观察升级到跟踪。');
+  } else {
+    upgrade.push('如果价格从弱转强并出现修复性拉升，市场才会重新给这条主线更高权重。');
+  }
+
+  if (data.liveNews.length > 0) {
+    upgrade.push('如果实时快讯从个股扩散到板块或龙头映射，主线强度会明显上一个台阶。');
+  }
+
+  if (data.summary.sentiment === 'positive' && data.pctChange <= 0) {
+    downgrade.push('如果亮点继续拿不到价格承接，这条主线会先从发酵降级为观察。');
+  }
+
+  if (data.liveNews.length === 0) {
+    downgrade.push('如果一直没有新的增量消息补强，市场注意力很容易转走。');
+  } else {
+    downgrade.push('如果后续快讯停止扩散，只剩孤立消息，短线热度会逐步回落。');
+  }
+
+  if (topRisk.length > 0) {
+    topRisk.forEach((item) => {
+      downgrade.push(`如果 ${item.label} 相关扰动继续升温，当前预期会先被压低一级。`);
+      invalidation.push(`如果 ${item.label} 成为市场主导叙事，当前短线逻辑基本失效。`);
+    });
+  }
+
+  if (data.summary.sentiment === 'negative' || data.pctChange <= -5) {
+    invalidation.push('如果价格继续单边走弱且没有修复承接，当前观察价值会明显下降。');
+  } else {
+    invalidation.push('如果价格快速跌破当前承接并伴随负面扩散，主线应直接转入失效处理。');
+  }
+
+  return {
+    upgrade: upgrade.slice(0, 3),
+    downgrade: downgrade.slice(0, 3),
+    invalidation: invalidation.slice(0, 3),
+  };
+}
+
 function getFocusHighlights(highlights: HighlightItem[]) {
   const focus: HighlightItem[] = [];
   const topPositive = highlights.find((item) => item.side === 'positive');
@@ -550,12 +602,24 @@ function SummaryTile({
   value,
   helper,
   onClick,
+  tone = 'neutral',
 }: {
   title: string;
   value: string;
   helper: string;
   onClick?: () => void;
+  tone?: 'neutral' | 'cyan' | 'red' | 'emerald' | 'amber';
 }) {
+  const toneClass =
+    tone === 'cyan'
+      ? 'border-cyan-400/20 bg-cyan-500/10'
+      : tone === 'red'
+        ? 'border-red-400/20 bg-red-500/10'
+        : tone === 'emerald'
+          ? 'border-emerald-400/20 bg-emerald-500/10'
+          : tone === 'amber'
+            ? 'border-amber-400/20 bg-amber-500/10'
+            : 'border-white/10 bg-white/[0.03]';
   const content = (
     <>
       <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{title}</div>
@@ -569,7 +633,7 @@ function SummaryTile({
       <button
         type="button"
         onClick={onClick}
-        className="w-full rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-left transition hover:border-white/20 hover:bg-white/[0.05]"
+        className={`w-full rounded-3xl border p-5 text-left transition hover:border-white/20 hover:bg-white/[0.05] ${toneClass}`}
       >
         {content}
       </button>
@@ -577,7 +641,7 @@ function SummaryTile({
   }
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+    <div className={`rounded-3xl border p-5 ${toneClass}`}>
       {content}
     </div>
   );
@@ -797,6 +861,63 @@ function InsightDetailsDialog({
           {items.map((item, index) => (
             <div key={`${title}-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-300">
               {item}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TurningPointsDialog({
+  open,
+  onOpenChange,
+  groups,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  groups: ReturnType<typeof getTurningPointGroups>;
+}) {
+  const sections = [
+    {
+      title: '升级条件',
+      items: groups.upgrade,
+      tone: 'border-red-400/20 bg-red-500/10 text-red-200',
+      dot: 'bg-red-300',
+    },
+    {
+      title: '降级条件',
+      items: groups.downgrade,
+      tone: 'border-amber-400/20 bg-amber-500/10 text-amber-200',
+      dot: 'bg-amber-300',
+    },
+    {
+      title: '失效条件',
+      items: groups.invalidation,
+      tone: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200',
+      dot: 'bg-emerald-300',
+    },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>观察转折点</DialogTitle>
+          <DialogDescription className="text-slate-400">把下一步最关键的升级、降级和失效条件拆开看。</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {sections.map((section) => (
+            <div key={section.title} className={`rounded-2xl border p-4 ${section.tone}`}>
+              <div className="text-sm font-semibold">{section.title}</div>
+              <div className="mt-3 space-y-3">
+                {section.items.map((item, index) => (
+                  <div key={`${section.title}-${index}`} className="flex gap-3">
+                    <div className={`mt-2 h-2.5 w-2.5 rounded-full ${section.dot}`} />
+                    <div className="text-sm leading-6">{item}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -1165,6 +1286,9 @@ export default function StockHighlightsPrototype() {
   const shortlineSignal = data ? getShortlineSignal(data, sortedHighlights) : null;
   const invalidationSignals = data ? getInvalidationSignals(data, sortedHighlights) : [];
   const nextTriggers = data ? getNextTriggers(data, sortedHighlights) : [];
+  const turningPointGroups = data
+    ? getTurningPointGroups(data, sortedHighlights)
+    : { upgrade: [], downgrade: [], invalidation: [] };
   const linkedFocusNews = useMemo(
     () => linkNewsToFocus(data?.liveNews ?? [], focusHighlights),
     [data?.liveNews, focusHighlights],
@@ -1638,12 +1762,20 @@ export default function StockHighlightsPrototype() {
                       value={sentimentLabel(data.summary.sentiment)}
                       helper={`${stageInfo?.title || '观察中'} · ${phaseInfo?.label || '观察中'}，点开看完整拆解。`}
                       onClick={() => setEmotionOpen(true)}
+                      tone="amber"
                     />
                     <SummaryTile
                       title="短线态势分"
                       value={String(shortlineSignal?.score ?? '--')}
                       helper={`${shortlineSignal?.title || '等待信号'}，点开看详细解释。`}
                       onClick={() => setSignalOpen(true)}
+                      tone={
+                        shortlineSignal?.tone === 'strong'
+                          ? 'red'
+                          : shortlineSignal?.tone === 'watch'
+                            ? 'amber'
+                            : 'neutral'
+                      }
                     />
                     <SummaryTile
                       title="亮点"
@@ -1654,6 +1786,7 @@ export default function StockHighlightsPrototype() {
                           : '当前没有明确亮点。'
                       }
                       onClick={topPositiveHighlight ? () => setActiveHighlight(topPositiveHighlight) : undefined}
+                      tone="red"
                     />
                     <SummaryTile
                       title="风险"
@@ -1664,12 +1797,18 @@ export default function StockHighlightsPrototype() {
                           : '当前没有明确风险。'
                       }
                       onClick={topRiskHighlight ? () => setActiveHighlight(topRiskHighlight) : undefined}
+                      tone="emerald"
                     />
                     <SummaryTile
                       title="观察转折点"
-                      value={String(nextTriggers.length)}
-                      helper={nextTriggers[0] || '暂时没有新的转折观察点。'}
+                      value={String(
+                        turningPointGroups.upgrade.length +
+                          turningPointGroups.downgrade.length +
+                          turningPointGroups.invalidation.length,
+                      )}
+                      helper={turningPointGroups.upgrade[0] || '暂时没有新的转折观察点。'}
                       onClick={() => setTurningPointsOpen(true)}
+                      tone="cyan"
                     />
                   </div>
 
@@ -1754,13 +1893,7 @@ export default function StockHighlightsPrototype() {
           `解释：${shortlineSignal?.summary || '等待更多价格、消息和证据链确认。'}`,
         ]}
       />
-      <InsightDetailsDialog
-        open={turningPointsOpen}
-        onOpenChange={setTurningPointsOpen}
-        title="观察转折点"
-        summary="这里不看重复信息，只看最值得盯的下一步变化。"
-        items={nextTriggers.length > 0 ? nextTriggers : ['暂时没有新的转折观察点。']}
-      />
+      <TurningPointsDialog open={turningPointsOpen} onOpenChange={setTurningPointsOpen} groups={turningPointGroups} />
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="rounded-3xl border-slate-200 bg-white sm:max-w-xl">
