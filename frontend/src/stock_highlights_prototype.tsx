@@ -15,7 +15,6 @@ import {
   ShieldAlert,
   Sparkles,
   Star,
-  TrendingDown,
   TrendingUp,
   Zap,
 } from 'lucide-react';
@@ -39,6 +38,15 @@ const RECENT_STOCKS_KEY = 'stock-highlights:recent-stocks';
 const WATCHLIST_KEY = 'stock-highlights:watchlist';
 const MODEL_PROFILES_KEY = 'stock-highlights:model-profiles';
 const ACTIVE_MODEL_PROFILE_KEY = 'stock-highlights:active-model-profile';
+
+type MainlineTimelineItem = {
+  time: string;
+  title: string;
+  detail: string;
+  tone: 'cyan' | 'red' | 'emerald' | 'amber';
+  url?: string;
+  source?: string;
+};
 
 const DEFAULT_MODEL_PROFILES: AnalysisProfile[] = [
   {
@@ -623,20 +631,50 @@ function getMainlineTimeline(
   verificationSignals: VerificationSignal[],
   pctChange: number,
 ) {
-  const items: Array<{ time: string; title: string; detail: string; tone: 'cyan' | 'red' | 'emerald' | 'amber' }> = [];
+  const items: MainlineTimelineItem[] = [];
   if (!highlight) {
     return items;
   }
 
+  const primaryEvidence = highlight.evidence[0];
+
   highlight.evidenceChain.forEach((chainItem) => {
     if (chainItem.startsWith('起点')) {
-      items.push({ time: '起点', title: '主线触发', detail: chainItem.replace('起点：', ''), tone: 'cyan' });
+      items.push({
+        time: '起点',
+        title: '主线触发',
+        detail: chainItem.replace('起点：', ''),
+        tone: 'cyan',
+        url: primaryEvidence?.url,
+        source: primaryEvidence?.source,
+      });
     } else if (chainItem.startsWith('强化')) {
-      items.push({ time: '强化', title: '主线强化', detail: chainItem.replace('强化：', ''), tone: 'red' });
+      items.push({
+        time: '强化',
+        title: '主线强化',
+        detail: chainItem.replace('强化：', ''),
+        tone: 'red',
+        url: primaryEvidence?.url,
+        source: primaryEvidence?.source,
+      });
     } else if (chainItem.startsWith('当前关键')) {
-      items.push({ time: '当前', title: '当前关键', detail: chainItem.replace('当前关键：', ''), tone: 'amber' });
+      items.push({
+        time: '当前',
+        title: '当前关键',
+        detail: chainItem.replace('当前关键：', ''),
+        tone: 'amber',
+        url: primaryEvidence?.url,
+        source: primaryEvidence?.source,
+      });
     } else if (chainItem.startsWith('后续验证')) {
-      items.push({ time: '后续', title: '后续验证', detail: chainItem.replace('后续验证：', ''), tone: 'emerald' });
+      items.push({
+        time: '后续',
+        title: '后续验证',
+        detail: chainItem.replace('后续验证：', ''),
+        tone: 'emerald',
+        url: primaryEvidence?.url,
+        source: primaryEvidence?.source,
+      });
     }
   });
 
@@ -650,6 +688,8 @@ function getMainlineTimeline(
         title: signal.label,
         detail: signal.news.title,
         tone: signal.tone === 'positive' ? 'red' : signal.tone === 'risk' ? 'emerald' : 'amber',
+        url: signal.news.url,
+        source: signal.news.source,
       });
     });
 
@@ -737,6 +777,14 @@ function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
   return 'border-white/10 bg-white/5 text-slate-200';
 }
 
+function readableBadgeClass(tone: 'default' | 'cyan' | 'amber' | 'emerald' | 'red' = 'default') {
+  if (tone === 'cyan') return 'border-cyan-400/20 bg-cyan-500/12 text-cyan-100';
+  if (tone === 'amber') return 'border-amber-400/20 bg-amber-500/12 text-amber-100';
+  if (tone === 'emerald') return 'border-emerald-400/20 bg-emerald-500/12 text-emerald-100';
+  if (tone === 'red') return 'border-red-400/20 bg-red-500/12 text-red-100';
+  return 'border-white/10 bg-white/[0.05] text-slate-100';
+}
+
 function loadSavedArray<T>(key: string, limit: number): T[] {
   try {
     const raw = window.localStorage.getItem(key);
@@ -751,53 +799,16 @@ function loadSavedArray<T>(key: string, limit: number): T[] {
   }
 }
 
-function SummaryTile({
-  title,
-  value,
-  helper,
-  onClick,
-  tone = 'neutral',
-}: {
-  title: string;
-  value: string;
-  helper: string;
-  onClick?: () => void;
-  tone?: 'neutral' | 'cyan' | 'red' | 'emerald' | 'amber';
-}) {
-  const toneClass =
-    tone === 'cyan'
-      ? 'border-cyan-400/20 bg-cyan-500/10'
-      : tone === 'red'
-        ? 'border-red-400/20 bg-red-500/10'
-        : tone === 'emerald'
-          ? 'border-emerald-400/20 bg-emerald-500/10'
-          : tone === 'amber'
-            ? 'border-amber-400/20 bg-amber-500/10'
-            : 'border-white/10 bg-white/[0.03]';
-  const content = (
-    <>
-      <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{title}</div>
-      <div className="mt-3 text-3xl font-semibold text-white">{value}</div>
-      <div className="mt-2 text-sm leading-6 text-slate-400">{helper}</div>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`w-full rounded-3xl border p-5 text-left transition hover:border-white/20 hover:bg-white/[0.05] ${toneClass}`}
-      >
-        {content}
-      </button>
-    );
-  }
-
+function HintButton({ label }: { label: string }) {
   return (
-    <div className={`rounded-3xl border p-5 ${toneClass}`}>
-      {content}
-    </div>
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400 transition hover:border-white/20 hover:text-white"
+    >
+      <HelpCircle className="h-3.5 w-3.5" />
+    </button>
   );
 }
 
@@ -954,8 +965,10 @@ function EmotionDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>当前情绪</DialogTitle>
-          <DialogDescription className="text-slate-400">把情绪阶段和拆解说明放到一处，不再重复展示。</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <span>当前情绪</span>
+            <HintButton label="把情绪阶段和拆解说明放到一处，不再重复展示。" />
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -1057,8 +1070,10 @@ function TurningPointsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>观察转折点</DialogTitle>
-          <DialogDescription className="text-slate-400">把下一步最关键的升级、降级和失效条件拆开看。</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <span>观察转折点</span>
+            <HintButton label="把下一步最关键的升级、降级和失效条件拆开看。" />
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {sections.map((section) => (
@@ -1072,6 +1087,63 @@ function TurningPointsDialog({
                   </div>
                 ))}
               </div>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MainlineTimelineDialog({
+  open,
+  onOpenChange,
+  items,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  items: MainlineTimelineItem[];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span>主线演进</span>
+            <HintButton label="把起点、强化、当前关键、后续验证和盘面反馈压成一条时间线。" />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div key={`${item.time}-${item.title}-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <span>{item.time}</span>
+                <Badge
+                  className={
+                    item.tone === 'red'
+                      ? 'border-red-400/20 bg-red-500/10 text-red-200'
+                      : item.tone === 'emerald'
+                        ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+                        : item.tone === 'amber'
+                          ? 'border-amber-400/20 bg-amber-500/10 text-amber-200'
+                          : 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200'
+                  }
+                >
+                  {item.title}
+                </Badge>
+                {item.source ? <Badge className="border-slate-500/30 bg-slate-800/80 text-slate-100">{item.source}</Badge> : null}
+              </div>
+              <div className="mt-3 text-sm leading-6 text-slate-200">{item.detail}</div>
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-1 text-xs text-cyan-300 transition hover:text-cyan-200"
+                >
+                  打开来源 <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
             </div>
           ))}
         </div>
@@ -1296,6 +1368,7 @@ export default function StockHighlightsPrototype() {
   const [listsExpanded, setListsExpanded] = useState(true);
   const [emotionOpen, setEmotionOpen] = useState(false);
   const [signalOpen, setSignalOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [turningPointsOpen, setTurningPointsOpen] = useState(false);
   const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(DEFAULT_MODEL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState(DEFAULT_MODEL_PROFILES[0].id);
@@ -1552,34 +1625,26 @@ export default function StockHighlightsPrototype() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {selectedStock ? (
-                  <button
-                    type="button"
-                    className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
-                      data?.analysisMode === 'ai'
+                <button
+                  type="button"
+                  className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
+                    !selectedStock
+                      ? 'border-white/10 bg-white/[0.04] text-slate-200'
+                      : data?.analysisMode === 'ai'
                         ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'
                         : 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-                    }`}
-                    onClick={() => setAiInsightOpen(true)}
-                  >
-                    {data?.analysisMode === 'ai' ? (
-                      <>
-                        <Bot className="mr-1 h-3.5 w-3.5" />
-                        AI 研判
-                      </>
-                    ) : data?.analysisPending ? (
-                      <>
-                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                        AI 生成中
-                      </>
-                    ) : (
-                      <>
-                        <ShieldAlert className="mr-1 h-3.5 w-3.5" />
-                        规则回退
-                      </>
-                    )}
-                  </button>
-                ) : null}
+                  }`}
+                  onClick={() => setAiInsightOpen(true)}
+                >
+                  {selectedStock && data?.analysisPending ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : selectedStock && data?.analysisMode !== 'ai' ? (
+                    <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+                  ) : (
+                    <Bot className="mr-1 h-3.5 w-3.5" />
+                  )}
+                  AI 研判
+                </button>
                 <button
                   type="button"
                   aria-label="查看说明"
@@ -1762,7 +1827,7 @@ export default function StockHighlightsPrototype() {
                           </div>
                           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
                             <div>
-                              {displayStock.code} · {displayStock.industry}
+                              {displayStock.code} · {displayStock.industry || '行业待识别'}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <button
@@ -1833,7 +1898,7 @@ export default function StockHighlightsPrototype() {
                             onClick={() => setEmotionOpen(true)}
                           >
                             <span className="text-[11px] uppercase tracking-[0.18em] text-slate-100/80">当前情绪</span>
-                            <span>{phaseInfo?.label || sentimentLabel(data.summary.sentiment)}</span>
+                            <span>{sentimentLabel(data.summary.sentiment)}</span>
                           </button>
                         </div>
                       </div>
@@ -1861,8 +1926,10 @@ export default function StockHighlightsPrototype() {
                           </div>
                         ) : null}
                         {mainlineStrength ? (
-                          <div
-                            className={`mt-4 rounded-2xl border px-4 py-3 ${
+                          <button
+                            type="button"
+                            onClick={() => setTimelineOpen(true)}
+                            className={`mt-4 w-full rounded-2xl border px-4 py-3 text-left transition hover:border-white/20 ${
                               mainlineStrength.tone === 'red'
                                 ? 'border-red-400/20 bg-red-500/10'
                                 : mainlineStrength.tone === 'amber'
@@ -1885,22 +1952,20 @@ export default function StockHighlightsPrototype() {
                               </div>
                             </div>
                             <div className="mt-2 text-sm leading-6 text-slate-100">{mainlineStrength.summary}</div>
-                          </div>
+                          </button>
                         ) : null}
                       </div>
                     </div>
                   </div>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
+                    <CardHeader className="border-b border-white/10 pb-5">
+                      <div className="flex items-start gap-3">
                         <Flame className="h-5 w-5 text-red-300" />
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="text-lg font-semibold">核心驱动与观察要点</div>
-                          <div className="text-sm text-slate-400">
-                            把最值得短线关注的主因和失效条件压缩成可执行观察清单。
-                          </div>
                         </div>
+                        <HintButton label="把最值得短线关注的主因和失效条件压缩成可执行观察清单。" />
                       </div>
                     </CardHeader>
                     <CardContent className="grid gap-4 pt-6 lg:grid-cols-[1fr_1fr]">
@@ -1960,15 +2025,13 @@ export default function StockHighlightsPrototype() {
                   </Card>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
+                    <CardHeader className="border-b border-white/10 pb-5">
+                      <div className="flex items-start gap-3">
                         <Sparkles className="h-5 w-5 text-cyan-300" />
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="text-lg font-semibold">次级线索</div>
-                          <div className="text-sm text-slate-400">
-                            只留主线之外，但还值得顺手跟踪的少量补充信号。
-                          </div>
                         </div>
+                        <HintButton label="只留主线之外，但还值得顺手跟踪的少量补充信号。" />
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-6">
@@ -2023,36 +2086,28 @@ export default function StockHighlightsPrototype() {
                 </section>
 
                 <section className="space-y-6">
-                  <div className="grid gap-4">
-                    <SummaryTile
-                      title="当前情绪"
-                      value={sentimentLabel(data.summary.sentiment)}
-                      helper={`${stageInfo?.title || '观察中'} · ${phaseInfo?.label || '观察中'}，点开看完整拆解。`}
-                      onClick={() => setEmotionOpen(true)}
-                      tone="amber"
-                    />
-                  </div>
-
                   {data.boardContext ? (
                     <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                      <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                        <div className="flex items-center gap-3">
+                      <CardHeader className="border-b border-white/10 pb-5">
+                        <div className="flex items-start gap-3">
                           <TrendingUp className="h-5 w-5 text-cyan-300" />
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <div className="text-lg font-semibold">板块链条</div>
-                            <div className="text-sm text-slate-400">先看所属行业当前强弱，再判断这只票是在领涨、跟随还是掉队。</div>
                           </div>
+                          <HintButton label="先看所属行业当前强弱，再判断这只票是在领涨、跟随还是掉队。" />
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4 pt-6">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{data.boardContext.industry || '未识别行业'}</Badge>
+                          <Badge className={readableBadgeClass(data.boardContext.industry ? 'cyan' : 'amber')}>
+                            {data.boardContext.industry || '行业待识别'}
+                          </Badge>
                           {data.boardContext.boardPct !== null && data.boardContext.boardPct !== undefined ? (
                             <Badge className={priceBadgeClass(data.boardContext.boardPct)}>
                               板块 {percentText(data.boardContext.boardPct)}
                             </Badge>
                           ) : null}
-                          <Badge className="border-cyan-400/20 bg-cyan-500/10 text-cyan-200">{data.boardContext.role}</Badge>
+                          <Badge className={readableBadgeClass('cyan')}>{data.boardContext.role}</Badge>
                         </div>
                         <div className="text-sm leading-6 text-slate-300">{data.boardContext.summary}</div>
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -2077,64 +2132,14 @@ export default function StockHighlightsPrototype() {
                     </Card>
                   ) : null}
 
-                  {mainlineTimeline.length > 0 ? (
-                    <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                      <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                        <div className="flex items-center gap-3">
-                          <TrendingDown className="h-5 w-5 text-amber-300" />
-                          <div>
-                            <div className="text-lg font-semibold">主线演进</div>
-                            <div className="text-sm text-slate-400">把起点、强化、盘面反馈和待验证信号按时间顺序压成一条短线时间线。</div>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3 pt-6">
-                        {mainlineTimeline.map((item, index) => (
-                          <div key={`${item.time}-${item.title}-${index}`} className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                            <div
-                              className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                                item.tone === 'red'
-                                  ? 'bg-red-300'
-                                  : item.tone === 'emerald'
-                                    ? 'bg-emerald-300'
-                                    : item.tone === 'amber'
-                                      ? 'bg-amber-300'
-                                      : 'bg-cyan-300'
-                              }`}
-                            />
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                                <span>{item.time}</span>
-                                <Badge
-                                  className={
-                                    item.tone === 'red'
-                                      ? 'border-red-400/20 bg-red-500/10 text-red-200'
-                                      : item.tone === 'emerald'
-                                        ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
-                                        : item.tone === 'amber'
-                                          ? 'border-amber-400/20 bg-amber-500/10 text-amber-200'
-                                          : 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200'
-                                  }
-                                >
-                                  {item.title}
-                                </Badge>
-                              </div>
-                              <div className="mt-2 text-sm leading-6 text-slate-200">{item.detail}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  ) : null}
-
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
+                    <CardHeader className="border-b border-white/10 pb-5">
+                      <div className="flex items-start gap-3">
                         <Zap className="h-5 w-5 text-amber-300" />
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="text-lg font-semibold">主线验证快讯</div>
-                          <div className="text-sm text-slate-400">只留最能证明、扰动或等待确认主线的少量增量消息。</div>
                         </div>
+                        <HintButton label="只留最能证明、扰动或等待确认主线的少量增量消息。" />
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-5 pt-6">
@@ -2176,12 +2181,12 @@ export default function StockHighlightsPrototype() {
                                     {signal.label}
                                   </Badge>
                                   {signal.linkedLabel ? (
-                                    <Badge className="border-white/10 bg-white/[0.05] text-slate-200">{signal.linkedLabel}</Badge>
+                                    <Badge className={readableBadgeClass('default')}>{signal.linkedLabel}</Badge>
                                   ) : null}
                                   {signal.news.tag ? (
-                                    <Badge className="border-white/10 bg-white/[0.05] text-slate-300">{signal.news.tag}</Badge>
+                                    <Badge className={readableBadgeClass('amber')}>{signal.news.tag}</Badge>
                                   ) : null}
-                                  <Badge variant="outline">{signal.news.source}</Badge>
+                                  {signal.news.source ? <Badge className={readableBadgeClass('cyan')}>{signal.news.source}</Badge> : null}
                                   <span>{signal.news.time}</span>
                                 </div>
                                 <div className="mt-2 text-sm leading-6 text-slate-300">{signal.description}</div>
@@ -2226,6 +2231,7 @@ export default function StockHighlightsPrototype() {
           ...(mainlineStrength?.drivers ?? []).map((item) => `强度演进：${item}`),
         ]}
       />
+      <MainlineTimelineDialog open={timelineOpen} onOpenChange={setTimelineOpen} items={mainlineTimeline} />
       <TurningPointsDialog open={turningPointsOpen} onOpenChange={setTurningPointsOpen} groups={turningPointGroups} />
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
@@ -2249,10 +2255,10 @@ export default function StockHighlightsPrototype() {
       <Dialog open={aiInsightOpen} onOpenChange={setAiInsightOpen}>
         <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>AI 研判详情</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              模型配置、执行状态和重算入口都收在这里。
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <span>AI 研判详情</span>
+              <HintButton label="模型配置、执行状态和重算入口都收在这里。" />
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
