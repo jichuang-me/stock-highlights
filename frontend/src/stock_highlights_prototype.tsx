@@ -424,6 +424,14 @@ function getFocusHighlights(highlights: HighlightItem[]) {
   return focus;
 }
 
+function findHighlightByLabel(highlights: HighlightItem[], side: HighlightItem['side'], label?: string | null) {
+  if (!label) {
+    return highlights.find((item) => item.side === side) || null;
+  }
+
+  return highlights.find((item) => item.side === side && item.label === label) || highlights.find((item) => item.side === side) || null;
+}
+
 function getChainSegment(item: HighlightItem | undefined, prefix: string) {
   if (!item) {
     return '';
@@ -574,6 +582,73 @@ function getVerificationSignals(linkedNews: ReturnType<typeof linkNewsToFocus>) 
   }
 
   return signals.slice(0, 3);
+}
+
+function getMainlineStrength(
+  data: StockHighlightsResponse,
+  highlights: HighlightItem[],
+  verificationSignals: VerificationSignal[],
+  turningPointGroups: ReturnType<typeof getTurningPointGroups>,
+) {
+  const topPositive = highlights.filter((item) => item.side === 'positive').slice(0, 2);
+  const topRisk = highlights.filter((item) => item.side === 'risk').slice(0, 2);
+  const positiveWeight = topPositive.reduce((total, item) => total + item.score, 0);
+  const riskWeight = topRisk.reduce((total, item) => total + item.score, 0);
+  const positiveSignals = verificationSignals.filter((item) => item.tone === 'positive').length;
+  const riskSignals = verificationSignals.filter((item) => item.tone === 'risk').length;
+
+  const rawScore =
+    50 +
+    positiveWeight * 0.18 -
+    riskWeight * 0.14 +
+    positiveSignals * 8 -
+    riskSignals * 10 +
+    Math.max(Math.min(data.pctChange * 2.2, 14), -14) +
+    Math.min(data.liveNews.length * 3, 9);
+  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+
+  const upgradeHint = turningPointGroups.upgrade[0] || '继续看是否出现新的强化证据。';
+  const downgradeHint = turningPointGroups.downgrade[0] || '继续看主线承接是否开始转弱。';
+
+  if (score >= 70) {
+    return {
+      score,
+      tone: 'red' as const,
+      label: '强化中',
+      summary: '当前主线处在强化段，最重要的是确认它是不是还能继续获得价格承接和增量验证。',
+      drivers: [
+        topPositive[0] ? `最强强化来自 ${topPositive[0].label}。` : '当前主要强化来自正向证据和价格承接。',
+        positiveSignals > 0 ? '实时增量消息正在继续给主线加分。' : '当前主线更依赖已有证据，增量消息还不算密集。',
+        `继续看：${upgradeHint}`,
+      ],
+    };
+  }
+
+  if (score >= 48) {
+    return {
+      score,
+      tone: 'amber' as const,
+      label: '待确认',
+      summary: '当前主线还没有彻底走成，重点不在表态，而在继续确认强化信号有没有延续。',
+      drivers: [
+        topPositive[0] ? `${topPositive[0].label} 还在，但强度没有完全拉开。` : '当前还缺一条足够强的单边驱动。',
+        topRisk[0] ? `${topRisk[0].label} 仍在压制预期。` : '当前主要问题是增量和承接都不算特别强。',
+        `如果转弱，先看：${downgradeHint}`,
+      ],
+    };
+  }
+
+  return {
+    score,
+    tone: 'emerald' as const,
+    label: '转弱',
+    summary: '当前主线更像在走弱或失去承接，先防守，等下一条更强的确认信号。',
+    drivers: [
+      topRisk[0] ? `最主要的压制来自 ${topRisk[0].label}。` : '当前更明显的是风险反馈，而不是主线强化。',
+      riskSignals > 0 ? '实时扰动已经开始压过强化信号。' : '即使没有新扰动，现有主线也缺少继续走强的证据。',
+      `失守后重点看：${turningPointGroups.invalidation[0] || '主线是否继续失去价格承接。'}`,
+    ],
+  };
 }
 
 function phaseBadgeClass(tone: 'hot' | 'warm' | 'cold' | 'neutral') {
@@ -1265,20 +1340,24 @@ export default function StockHighlightsPrototype() {
     [focusHighlights],
   );
   const topPositiveHighlight = useMemo(
-    () => sortedHighlights.find((item) => item.side === 'positive') || null,
-    [sortedHighlights],
+    () => findHighlightByLabel(sortedHighlights, 'positive', data?.aiTopPositiveLabel),
+    [data?.aiTopPositiveLabel, sortedHighlights],
   );
   const topRiskHighlight = useMemo(
-    () => sortedHighlights.find((item) => item.side === 'risk') || null,
-    [sortedHighlights],
+    () => findHighlightByLabel(sortedHighlights, 'risk', data?.aiTopRiskLabel),
+    [data?.aiTopRiskLabel, sortedHighlights],
+  );
+  const mainlineHighlight = useMemo(
+    () => topPositiveHighlight || primaryFocusHighlight,
+    [primaryFocusHighlight, topPositiveHighlight],
   );
   const primaryCurrentKey = useMemo(
-    () => getChainSegment(primaryFocusHighlight, '当前关键'),
-    [primaryFocusHighlight],
+    () => getChainSegment(mainlineHighlight, '当前关键'),
+    [mainlineHighlight],
   );
   const primaryValidation = useMemo(
-    () => getChainSegment(primaryFocusHighlight, '后续验证'),
-    [primaryFocusHighlight],
+    () => getChainSegment(mainlineHighlight, '后续验证'),
+    [mainlineHighlight],
   );
   const stageInfo = data ? getSentimentStage(data) : null;
   const phaseInfo = data ? getShortlinePhase(data, sortedHighlights) : null;
@@ -1294,6 +1373,10 @@ export default function StockHighlightsPrototype() {
     [data?.liveNews, focusHighlights],
   );
   const verificationSignals = useMemo(() => getVerificationSignals(linkedFocusNews), [linkedFocusNews]);
+  const mainlineStrength = useMemo(
+    () => (data ? getMainlineStrength(data, sortedHighlights, verificationSignals, turningPointGroups) : null),
+    [data, sortedHighlights, verificationSignals, turningPointGroups],
+  );
   const emotionDrivers = useMemo(
     () => (data ? getEmotionDrivers(data, phaseInfo) : null),
     [data, phaseInfo],
@@ -1618,6 +1701,33 @@ export default function StockHighlightsPrototype() {
                             ) : null}
                           </div>
                         ) : null}
+                        {mainlineStrength ? (
+                          <div
+                            className={`mt-4 rounded-2xl border px-4 py-3 ${
+                              mainlineStrength.tone === 'red'
+                                ? 'border-red-400/20 bg-red-500/10'
+                                : mainlineStrength.tone === 'amber'
+                                  ? 'border-amber-400/20 bg-amber-500/10'
+                                  : 'border-emerald-400/20 bg-emerald-500/10'
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-200">主线强度演进</div>
+                              <div
+                                className={`text-sm font-semibold ${
+                                  mainlineStrength.tone === 'red'
+                                    ? 'text-red-300'
+                                    : mainlineStrength.tone === 'amber'
+                                      ? 'text-amber-300'
+                                      : 'text-emerald-300'
+                                }`}
+                              >
+                                {mainlineStrength.label} · {mainlineStrength.score}
+                              </div>
+                            </div>
+                            <div className="mt-2 text-sm leading-6 text-slate-100">{mainlineStrength.summary}</div>
+                          </div>
+                        ) : null}
                       </div>
                     </CardHeader>
 
@@ -1767,7 +1877,7 @@ export default function StockHighlightsPrototype() {
                     <SummaryTile
                       title="短线态势分"
                       value={String(shortlineSignal?.score ?? '--')}
-                      helper={`${shortlineSignal?.title || '等待信号'}，点开看详细解释。`}
+                      helper={`主线${mainlineStrength?.label || shortlineSignal?.title || '待确认'}，点开看详细解释。`}
                       onClick={() => setSignalOpen(true)}
                       tone={
                         shortlineSignal?.tone === 'strong'
@@ -1806,7 +1916,7 @@ export default function StockHighlightsPrototype() {
                           turningPointGroups.downgrade.length +
                           turningPointGroups.invalidation.length,
                       )}
-                      helper={turningPointGroups.upgrade[0] || '暂时没有新的转折观察点。'}
+                      helper={data.aiTurningPoint || turningPointGroups.upgrade[0] || '暂时没有新的转折观察点。'}
                       onClick={() => setTurningPointsOpen(true)}
                       tone="cyan"
                     />
@@ -1890,7 +2000,9 @@ export default function StockHighlightsPrototype() {
         items={[
           `当前分值：${shortlineSignal?.score ?? '--'}`,
           `当前判断：${shortlineSignal?.title || '等待信号'}`,
+          `主线强度：${mainlineStrength?.label || '待确认'}${mainlineStrength ? ` (${mainlineStrength.score})` : ''}`,
           `解释：${shortlineSignal?.summary || '等待更多价格、消息和证据链确认。'}`,
+          ...(mainlineStrength?.drivers ?? []).map((item) => `强度演进：${item}`),
         ]}
       />
       <TurningPointsDialog open={turningPointsOpen} onOpenChange={setTurningPointsOpen} groups={turningPointGroups} />
@@ -1940,6 +2052,23 @@ export default function StockHighlightsPrototype() {
             {data?.analysisPending ? (
               <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
                 已先返回规则结果，AI 总结生成后会自动刷新。
+              </div>
+            ) : null}
+
+            {data ? (
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">AI 排序亮点</div>
+                  <div className="mt-2 text-sm font-medium text-white">{data.aiTopPositiveLabel || '未单独挑出'}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">AI 排序风险</div>
+                  <div className="mt-2 text-sm font-medium text-white">{data.aiTopRiskLabel || '未单独挑出'}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">AI 转折点</div>
+                  <div className="mt-2 text-sm font-medium text-white">{data.aiTurningPoint || '等待生成'}</div>
+                </div>
               </div>
             ) : null}
 

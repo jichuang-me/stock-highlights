@@ -61,7 +61,7 @@ def _extract_ai_profile(request: Request) -> Optional[Dict[str, str]]:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.10.0"}
+    return {"status": "ok", "version": "v4.11.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -124,6 +124,9 @@ async def _build_highlights_response(
     analysis_pending = False
     analysis_updated_at = None
     analysis_profile_label = profile.get("label") if profile else "系统默认"
+    ai_top_positive_label = None
+    ai_top_risk_label = None
+    ai_turning_point = None
 
     ai_summary, cache_key = await asyncio.to_thread(
         get_cached_ai_summary,
@@ -150,6 +153,9 @@ async def _build_highlights_response(
         analysis_model = ai_summary.get("model")
         analysis_updated_at = ai_summary.get("updatedAt")
         analysis_profile_label = ai_summary.get("profileLabel", analysis_profile_label)
+        ai_top_positive_label = ai_summary.get("topPositiveLabel")
+        ai_top_risk_label = ai_summary.get("topRiskLabel")
+        ai_turning_point = ai_summary.get("keyTurningPoint")
     else:
         analysis_pending = await asyncio.to_thread(
             queue_ai_summary,
@@ -187,6 +193,9 @@ async def _build_highlights_response(
         analysisModel=analysis_model,
         analysisUpdatedAt=analysis_updated_at,
         analysisProfileLabel=analysis_profile_label,
+        aiTopPositiveLabel=ai_top_positive_label,
+        aiTopRiskLabel=ai_top_risk_label,
+        aiTurningPoint=ai_turning_point,
         price=float(stock_price["price"]),
         pctChange=float(stock_price["pct"]),
         highlights=highlights,

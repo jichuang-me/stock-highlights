@@ -63,6 +63,9 @@ export type StockHighlightsResponse = {
   analysisModel?: string | null;
   analysisUpdatedAt?: string | null;
   analysisProfileLabel?: string | null;
+  aiTopPositiveLabel?: string | null;
+  aiTopRiskLabel?: string | null;
+  aiTurningPoint?: string | null;
   price: number;
   pctChange: number;
   highlights: HighlightItem[];

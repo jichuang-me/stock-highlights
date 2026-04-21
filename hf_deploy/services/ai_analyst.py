@@ -36,7 +36,10 @@ SYSTEM_PROMPT = """
 {
   "headline": "一句话短线结论，18字以内",
   "marketImpression": "120字以内，说明当前最强驱动、情绪位置、当前关键证据和需要盯防的验证点",
-  "sentiment": "positive | negative | neutral"
+  "sentiment": "positive | negative | neutral",
+  "topPositiveLabel": "从 focusHighlights 里选最该交易的亮点标签，没有就留空",
+  "topRiskLabel": "从 focusHighlights 里选最该防守的风险标签，没有就留空",
+  "keyTurningPoint": "一句话写出当前最重要的转折观察点"
 }
 """
 
@@ -132,6 +135,9 @@ def _normalize_result(result: Dict[str, Any], model_name: str, profile_label: st
     headline = str(result.get("headline", "")).strip()
     market_impression = str(result.get("marketImpression", "")).strip()
     sentiment = str(result.get("sentiment", "neutral")).strip().lower()
+    top_positive_label = str(result.get("topPositiveLabel", "")).strip()
+    top_risk_label = str(result.get("topRiskLabel", "")).strip()
+    key_turning_point = str(result.get("keyTurningPoint", "")).strip()
 
     if sentiment not in {"positive", "negative", "neutral"}:
         sentiment = "neutral"
@@ -145,6 +151,9 @@ def _normalize_result(result: Dict[str, Any], model_name: str, profile_label: st
         "sentiment": sentiment,
         "model": model_name,
         "profileLabel": profile_label,
+        "topPositiveLabel": top_positive_label[:32] or None,
+        "topRiskLabel": top_risk_label[:32] or None,
+        "keyTurningPoint": key_turning_point[:120] or None,
     }
 
 

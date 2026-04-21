@@ -70,6 +70,9 @@ class HighlightsResponse(BaseModel):
     analysisModel: Optional[str] = None
     analysisUpdatedAt: Optional[str] = None
     analysisProfileLabel: Optional[str] = None
+    aiTopPositiveLabel: Optional[str] = None
+    aiTopRiskLabel: Optional[str] = None
+    aiTurningPoint: Optional[str] = None
     price: float
     pctChange: float
     highlights: List[HighlightItem] = Field(default_factory=list)
