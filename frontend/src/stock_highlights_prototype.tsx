@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   Bot,
   ChevronDown,
-  ExternalLink,
   Flame,
   Heart,
   HelpCircle,
@@ -21,7 +20,7 @@ import {
 
 import { useStockHighlights } from './hooks/useStockHighlights';
 import { useStockSearch } from './hooks/useStockSearch';
-import type { AnalysisProfile, HighlightItem, SearchStock, StockHighlightsResponse } from './lib/types';
+import type { AnalysisProfile, EvidenceItem, HighlightItem, SearchStock, StockHighlightsResponse } from './lib/types';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader } from './components/ui/card';
@@ -44,9 +43,21 @@ type MainlineTimelineItem = {
   title: string;
   detail: string;
   tone: 'cyan' | 'red' | 'emerald' | 'amber';
+  linkTitle?: string;
   url?: string;
   source?: string;
 };
+
+type InvalidationSignal = {
+  text: string;
+  evidence?: EvidenceItem | null;
+};
+
+const DIALOG_BASE_CLASS =
+  'w-[min(96vw,44rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950 text-slate-100 shadow-2xl';
+
+const DIALOG_WIDE_CLASS =
+  'w-[min(96vw,72rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950 text-slate-100 shadow-2xl';
 
 const DEFAULT_MODEL_PROFILES: AnalysisProfile[] = [
   {
@@ -173,6 +184,13 @@ function emotionChipClass(tone?: 'hot' | 'warm' | 'cold' | 'neutral') {
   if (tone === 'warm') return 'border-amber-400/20 bg-amber-500/10 text-amber-200';
   if (tone === 'cold') return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200';
   return 'border-slate-500/20 bg-slate-500/10 text-slate-200';
+}
+
+function boardRoleChipClass(role?: string | null) {
+  if (role === '领涨') return 'border-red-400/20 bg-red-500/12 text-red-100';
+  if (role === '补涨') return 'border-amber-400/20 bg-amber-500/12 text-amber-100';
+  if (role === '掉队') return 'border-emerald-400/20 bg-emerald-500/12 text-emerald-100';
+  return 'border-cyan-400/20 bg-cyan-500/12 text-cyan-100';
 }
 
 function parseNewsTime(value: string) {
@@ -351,23 +369,32 @@ function getShortlineSignal(data: StockHighlightsResponse, highlights: Highlight
 }
 
 function getInvalidationSignals(data: StockHighlightsResponse, highlights: HighlightItem[]) {
-  const signals: string[] = [];
+  const signals: InvalidationSignal[] = [];
   const topRisk = highlights.filter((item) => item.side === 'risk').slice(0, 2);
 
   topRisk.forEach((item) => {
-    signals.push(`${item.label}继续发酵，短线预期会明显转弱。`);
+    signals.push({
+      text: `${item.label}继续发酵，短线预期会明显转弱。`,
+      evidence: getPrimaryEvidence(item),
+    });
   });
 
   if (data.summary.sentiment === 'positive' && data.pctChange <= 0) {
-    signals.push('正向逻辑如果持续拿不到价格承接，主线强度会快速下降。');
+    signals.push({
+      text: '正向逻辑如果持续拿不到价格承接，主线强度会快速下降。',
+    });
   }
 
   if (data.liveNews.length === 0) {
-    signals.push('当前缺少实时增量消息，若后续没有扩散，容易从看点变成孤立事件。');
+    signals.push({
+      text: '当前缺少实时增量消息，若后续没有扩散，容易从看点变成孤立事件。',
+    });
   }
 
   if (signals.length === 0) {
-    signals.push('暂未看到明显失效信号，重点还是盯价格是否继续强化。');
+    signals.push({
+      text: '暂未看到明显失效信号，重点还是盯价格是否继续强化。',
+    });
   }
 
   return signals.slice(0, 3);
@@ -645,6 +672,7 @@ function getMainlineTimeline(
         title: '主线触发',
         detail: chainItem.replace('起点：', ''),
         tone: 'cyan',
+        linkTitle: primaryEvidence?.title,
         url: primaryEvidence?.url,
         source: primaryEvidence?.source,
       });
@@ -654,6 +682,7 @@ function getMainlineTimeline(
         title: '主线强化',
         detail: chainItem.replace('强化：', ''),
         tone: 'red',
+        linkTitle: primaryEvidence?.title,
         url: primaryEvidence?.url,
         source: primaryEvidence?.source,
       });
@@ -663,6 +692,7 @@ function getMainlineTimeline(
         title: '当前关键',
         detail: chainItem.replace('当前关键：', ''),
         tone: 'amber',
+        linkTitle: primaryEvidence?.title,
         url: primaryEvidence?.url,
         source: primaryEvidence?.source,
       });
@@ -672,6 +702,7 @@ function getMainlineTimeline(
         title: '后续验证',
         detail: chainItem.replace('后续验证：', ''),
         tone: 'emerald',
+        linkTitle: primaryEvidence?.title,
         url: primaryEvidence?.url,
         source: primaryEvidence?.source,
       });
@@ -688,6 +719,7 @@ function getMainlineTimeline(
         title: signal.label,
         detail: signal.news.title,
         tone: signal.tone === 'positive' ? 'red' : signal.tone === 'risk' ? 'emerald' : 'amber',
+        linkTitle: signal.news.title,
         url: signal.news.url,
         source: signal.news.source,
       });
@@ -812,6 +844,35 @@ function HintButton({ label }: { label: string }) {
   );
 }
 
+function getPrimaryEvidence(item?: HighlightItem | null) {
+  if (!item) {
+    return null;
+  }
+  return item.evidence.find((evidence) => evidence.url) || item.evidence[0] || null;
+}
+
+function SourceTitleLink({
+  title,
+  url,
+  className = 'text-sm font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline',
+}: {
+  title?: string | null;
+  url?: string | null;
+  className?: string;
+}) {
+  if (!title) {
+    return null;
+  }
+  if (!url) {
+    return <div className={className.replace(' underline-offset-4 transition hover:text-cyan-100 hover:underline', '')}>{title}</div>;
+  }
+  return (
+    <a className={className} href={url} target="_blank" rel="noreferrer">
+      {title}
+    </a>
+  );
+}
+
 function getRadarValue(data: StockHighlightsResponse | null, label: string) {
   return data?.radar.find((point) => point.k === label)?.v ?? 0;
 }
@@ -881,16 +942,16 @@ function HighlightDetailsDialog({
 }) {
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+      <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-2xl`}>
         {item && (
           <>
             <DialogHeader>
               <DialogTitle className="flex flex-wrap items-center gap-2">
                 <span>{item.label}</span>
                 <Badge className={sideMeta[item.side].chip}>{sideMeta[item.side].label}</Badge>
-                <Badge variant="outline">Score {item.score}</Badge>
+                <Badge className={readableBadgeClass(item.side === 'positive' ? 'red' : 'emerald')}>Score {item.score}</Badge>
               </DialogTitle>
-              <DialogDescription className="text-slate-400">{item.category}</DialogDescription>
+              <DialogDescription className="text-slate-300">{item.category}</DialogDescription>
             </DialogHeader>
 
               <div className="space-y-5">
@@ -922,21 +983,17 @@ function HighlightDetailsDialog({
                   <div className="text-sm font-semibold text-white">证据来源</div>
                   {item.evidence.map((evidence) => (
                     <div key={`${item.id}-${evidence.url}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{evidence.source}</Badge>
-                      <span className="text-xs text-slate-500">{evidence.published_at}</span>
-                      {evidence.url ? (
-                        <a
-                          className="inline-flex items-center gap-1 text-xs text-cyan-300 underline"
-                          href={evidence.url}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          原文 <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={readableBadgeClass('cyan')}>{evidence.source}</Badge>
+                        <span className="text-xs text-slate-400">{evidence.published_at}</span>
                       </div>
-                      <div className="mt-2 text-sm font-semibold text-white">{evidence.title}</div>
+                      <div className="mt-3">
+                        <SourceTitleLink
+                          title={evidence.title}
+                          url={evidence.url}
+                          className="text-sm font-semibold text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -963,7 +1020,7 @@ function EmotionDetailsDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+      <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-2xl`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>当前情绪</span>
@@ -1019,10 +1076,10 @@ function InsightDetailsDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
+      <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-xl`}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="text-slate-400">{summary}</DialogDescription>
+          <DialogDescription className="text-slate-300">{summary}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           {items.map((item, index) => (
@@ -1068,7 +1125,7 @@ function TurningPointsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+      <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-2xl`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>观察转折点</span>
@@ -1106,7 +1163,7 @@ function MainlineTimelineDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+      <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-2xl`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>主线演进</span>
@@ -1131,18 +1188,27 @@ function MainlineTimelineDialog({
                 >
                   {item.title}
                 </Badge>
-                {item.source ? <Badge className="border-slate-500/30 bg-slate-800/80 text-slate-100">{item.source}</Badge> : null}
+                {item.source ? <Badge className={readableBadgeClass('default')}>{item.source}</Badge> : null}
               </div>
-              <div className="mt-3 text-sm leading-6 text-slate-200">{item.detail}</div>
-              {item.url ? (
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-1 text-xs text-cyan-300 transition hover:text-cyan-200"
-                >
-                  打开来源 <ExternalLink className="h-3.5 w-3.5" />
-                </a>
+              {item.url && item.linkTitle === item.detail ? (
+                <div className="mt-3">
+                  <SourceTitleLink
+                    title={item.detail}
+                    url={item.url}
+                    className="text-sm leading-6 text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                  />
+                </div>
+              ) : (
+                <div className="mt-3 text-sm leading-6 text-slate-200">{item.detail}</div>
+              )}
+              {item.linkTitle && item.linkTitle !== item.detail ? (
+                <div className="mt-3">
+                  <SourceTitleLink
+                    title={item.linkTitle}
+                    url={item.url}
+                    className="text-sm font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                  />
+                </div>
               ) : null}
             </div>
           ))}
@@ -1210,10 +1276,10 @@ function ModelManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-4xl">
+      <DialogContent className={`${DIALOG_WIDE_CLASS} sm:max-w-4xl`}>
         <DialogHeader>
           <DialogTitle>模型工作台</DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogDescription className="text-slate-300">
             用于选择默认分析模型，或添加你自己的 OpenAI 兼容模型端点。
             如果是本地模型，请提供当前 Hugging Face Space 能访问到的地址，而不是你电脑的 localhost。
           </DialogDescription>
@@ -1237,8 +1303,12 @@ function ModelManagerDialog({
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-base font-semibold text-white">{profile.label}</div>
-                          <Badge variant="outline">{profileKindLabel[profile.kind]}</Badge>
-                          <Badge variant="outline">{profile.mode === 'server' ? '服务端' : '自定义端点'}</Badge>
+                          <Badge className={readableBadgeClass(profile.kind === 'free' ? 'cyan' : profile.kind === 'api' ? 'amber' : 'emerald')}>
+                            {profileKindLabel[profile.kind]}
+                          </Badge>
+                          <Badge className={readableBadgeClass('default')}>
+                            {profile.mode === 'server' ? '服务端' : '自定义端点'}
+                          </Badge>
                         </div>
                         <div className="mt-2 text-sm text-slate-300">
                           {profile.vendor || 'server-auto'} / {profile.model || '按服务器优先级自动选择'}
@@ -1503,6 +1573,7 @@ export default function StockHighlightsPrototype() {
     () => topPositiveHighlight || primaryFocusHighlight,
     [primaryFocusHighlight, topPositiveHighlight],
   );
+  const mainlineEvidence = useMemo(() => getPrimaryEvidence(mainlineHighlight), [mainlineHighlight]);
   const primaryCurrentKey = useMemo(
     () => getChainSegment(mainlineHighlight, '当前关键'),
     [mainlineHighlight],
@@ -1573,6 +1644,7 @@ export default function StockHighlightsPrototype() {
     startTransition(() => {
       setSelectedStock(stock);
       setQuery(`${stock.code} ${stock.name}`);
+      setListsExpanded(false);
       persistRecentStocks(stock);
     });
   };
@@ -1619,15 +1691,14 @@ export default function StockHighlightsPrototype() {
           <section className="space-y-4">
             <div className="flex items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] px-4 py-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-3">
-                  <Badge className="border-cyan-400/20 bg-cyan-400/10 text-cyan-300">短线终端</Badge>
-                  <div className="text-xl font-semibold tracking-tight text-white">AI 个股短线看点</div>
-                </div>
+                <div className="text-xl font-semibold tracking-tight text-white">AI 个股短线看点</div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
+                  aria-label="AI 研判"
+                  title="AI 研判"
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition hover:border-white/20 ${
                     !selectedStock
                       ? 'border-white/10 bg-white/[0.04] text-slate-200'
                       : data?.analysisMode === 'ai'
@@ -1637,13 +1708,12 @@ export default function StockHighlightsPrototype() {
                   onClick={() => setAiInsightOpen(true)}
                 >
                   {selectedStock && data?.analysisPending ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : selectedStock && data?.analysisMode !== 'ai' ? (
-                    <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+                    <ShieldAlert className="h-4 w-4" />
                   ) : (
-                    <Bot className="mr-1 h-3.5 w-3.5" />
+                    <Bot className="h-4 w-4" />
                   )}
-                  AI 研判
                 </button>
                 <button
                   type="button"
@@ -1908,19 +1978,40 @@ export default function StockHighlightsPrototype() {
                         <div className="text-2xl font-semibold text-white">
                           {data.headline || 'AI 尚未生成主线，先看规则看点和快讯。'}
                         </div>
-                        <p className="mt-3 text-sm leading-6 text-slate-200">{data.marketImpression}</p>
+                        <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/30 p-4">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">市场印象</div>
+                          <p className="mt-2 text-sm leading-6 text-slate-100">{data.marketImpression}</p>
+                        </div>
                         {primaryCurrentKey || primaryValidation ? (
                           <div className="mt-4 grid gap-3 md:grid-cols-2">
                             {primaryCurrentKey ? (
                               <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                                 <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">当前关键证据</div>
                                 <div className="mt-2 text-sm leading-6 text-slate-100">{primaryCurrentKey}</div>
+                                {mainlineEvidence ? (
+                                  <div className="mt-3">
+                                    <SourceTitleLink
+                                      title={mainlineEvidence.title}
+                                      url={mainlineEvidence.url}
+                                      className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                                    />
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                             {primaryValidation ? (
                               <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                                 <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">后续验证</div>
                                 <div className="mt-2 text-sm leading-6 text-slate-100">{primaryValidation}</div>
+                                {mainlineEvidence ? (
+                                  <div className="mt-3">
+                                    <SourceTitleLink
+                                      title={mainlineEvidence.title}
+                                      url={mainlineEvidence.url}
+                                      className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                                    />
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -1958,7 +2049,7 @@ export default function StockHighlightsPrototype() {
                     </div>
                   </div>
 
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                  <Card className="rounded-[30px] border-transparent bg-transparent text-white shadow-none">
                     <CardHeader className="border-b border-white/10 pb-5">
                       <div className="flex items-start gap-3">
                         <Flame className="h-5 w-5 text-red-300" />
@@ -1974,22 +2065,40 @@ export default function StockHighlightsPrototype() {
                         {focusHighlights.length > 0 ? (
                           focusHighlights.map((item) => {
                             const Icon = sideMeta[item.side].icon;
+                            const evidence = getPrimaryEvidence(item);
                             return (
-                              <button
+                              <div
                                 key={item.id}
-                                className={`w-full rounded-3xl border p-4 text-left transition hover:border-white/20 ${sideMeta[item.side].panel}`}
-                                onClick={() => setActiveHighlight(item)}
-                                type="button"
+                                className={`w-full rounded-3xl border p-4 text-left ${sideMeta[item.side].panel}`}
                               >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <Icon className="h-4 w-4" />
                                     <span className="font-medium">{item.label}</span>
                                   </div>
-                                  <Badge className={sideMeta[item.side].chip}>Score {item.score}</Badge>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className={sideMeta[item.side].chip}>Score {item.score}</Badge>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      className="h-7 rounded-full px-3 text-xs text-slate-200 hover:bg-white/10 hover:text-white"
+                                      onClick={() => setActiveHighlight(item)}
+                                    >
+                                      证据链
+                                    </Button>
+                                  </div>
                                 </div>
                                 <div className="mt-3 text-sm leading-6 text-slate-100">{item.thesis}</div>
                                 <div className="mt-3 text-sm leading-6 text-slate-300">{item.importance}</div>
+                                {evidence ? (
+                                  <div className="mt-3">
+                                    <SourceTitleLink
+                                      title={evidence.title}
+                                      url={evidence.url}
+                                      className="text-sm font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                                    />
+                                  </div>
+                                ) : null}
                                 <div className="mt-4 space-y-2">
                                   {item.evidenceChain.slice(0, 3).map((chainItem, index) => (
                                     <div key={`${item.id}-chain-${index}`} className="flex gap-2 text-sm text-slate-200">
@@ -1998,7 +2107,7 @@ export default function StockHighlightsPrototype() {
                                     </div>
                                   ))}
                                 </div>
-                              </button>
+                              </div>
                             );
                           })
                         ) : (
@@ -2013,9 +2122,20 @@ export default function StockHighlightsPrototype() {
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
                           <div className="space-y-3">
                             {invalidationSignals.map((item, index) => (
-                                <div key={`${item}-${index}`} className="flex gap-3">
+                                <div key={`${item.text}-${index}`} className="flex gap-3">
                                   <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                                  <div className="text-sm leading-6 text-slate-300">{item}</div>
+                                  <div className="min-w-0">
+                                    <div className="text-sm leading-6 text-slate-300">{item.text}</div>
+                                    {item.evidence ? (
+                                      <div className="mt-2">
+                                        <SourceTitleLink
+                                          title={item.evidence.title}
+                                          url={item.evidence.url}
+                                          className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                                        />
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 </div>
                               ))}
                           </div>
@@ -2024,7 +2144,7 @@ export default function StockHighlightsPrototype() {
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                  <Card className="rounded-[30px] border-transparent bg-transparent text-white shadow-none">
                     <CardHeader className="border-b border-white/10 pb-5">
                       <div className="flex items-start gap-3">
                         <Sparkles className="h-5 w-5 text-cyan-300" />
@@ -2047,12 +2167,11 @@ export default function StockHighlightsPrototype() {
                         <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
                           {compactSecondaryHighlights.map(({ item, currentKey, validation }, index) => {
                             const Icon = sideMeta[item.side].icon;
+                            const evidence = getPrimaryEvidence(item);
                             return (
-                              <button
+                              <div
                                 key={item.id}
-                                className="w-full px-4 py-4 text-left transition hover:bg-white/[0.03]"
-                                onClick={() => setActiveHighlight(item)}
-                                type="button"
+                                className="w-full px-4 py-4 text-left"
                               >
                                 <div className={index > 0 ? 'border-t border-white/10 pt-4' : ''}>
                                   <div className="flex items-start justify-between gap-3">
@@ -2068,15 +2187,34 @@ export default function StockHighlightsPrototype() {
                                         <div className="mt-2 text-sm leading-6 text-slate-300">
                                           {currentKey || item.importance}
                                         </div>
+                                        {evidence ? (
+                                          <div className="mt-2">
+                                            <SourceTitleLink
+                                              title={evidence.title}
+                                              url={evidence.url}
+                                              className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                                            />
+                                          </div>
+                                        ) : null}
                                         {validation ? (
                                           <div className="mt-2 text-xs leading-5 text-slate-500">后续看：{validation}</div>
                                         ) : null}
                                       </div>
                                     </div>
-                                    <Badge className={`${sideMeta[item.side].chip} shrink-0`}>{item.score}</Badge>
+                                    <div className="flex items-center gap-2">
+                                      <Badge className={`${sideMeta[item.side].chip} shrink-0`}>{item.score}</Badge>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-7 rounded-full px-3 text-xs text-slate-300 hover:bg-white/10 hover:text-white"
+                                        onClick={() => setActiveHighlight(item)}
+                                      >
+                                        证据链
+                                      </Button>
+                                    </div>
                                   </div>
                                 </div>
-                              </button>
+                              </div>
                             );
                           })}
                         </div>
@@ -2087,14 +2225,14 @@ export default function StockHighlightsPrototype() {
 
                 <section className="space-y-6">
                   {data.boardContext ? (
-                    <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                    <Card className="rounded-[30px] border-transparent bg-transparent text-white shadow-none">
                       <CardHeader className="border-b border-white/10 pb-5">
                         <div className="flex items-start gap-3">
                           <TrendingUp className="h-5 w-5 text-cyan-300" />
                           <div className="min-w-0 flex-1">
                             <div className="text-lg font-semibold">板块链条</div>
                           </div>
-                          <HintButton label="先看所属行业当前强弱，再判断这只票是在领涨、跟随还是掉队。" />
+                          <HintButton label="先看所属行业当前强弱，再判断这只票是在领涨、补涨、跟随还是掉队。" />
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4 pt-6">
@@ -2107,10 +2245,16 @@ export default function StockHighlightsPrototype() {
                               板块 {percentText(data.boardContext.boardPct)}
                             </Badge>
                           ) : null}
-                          <Badge className={readableBadgeClass('cyan')}>{data.boardContext.role}</Badge>
+                          <Badge className={boardRoleChipClass(data.boardContext.role)}>{data.boardContext.role}</Badge>
                         </div>
-                        <div className="text-sm leading-6 text-slate-300">{data.boardContext.summary}</div>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white/[0.03] p-4">
+                          <div className="text-sm font-semibold text-white">链条定位</div>
+                          <div className="mt-2 text-sm leading-6 text-slate-200">
+                            {data.boardContext.roleReason || data.boardContext.summary}
+                          </div>
+                          <div className="mt-2 text-sm leading-6 text-slate-400">{data.boardContext.summary}</div>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                           <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">板块热度</div>
                             <div className="mt-2 text-sm leading-6 text-slate-200">
@@ -2127,12 +2271,49 @@ export default function StockHighlightsPrototype() {
                                 : '暂无明确领涨股'}
                             </div>
                           </div>
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">板块宽度</div>
+                            <div className="mt-2 text-sm leading-6 text-slate-200">
+                              {data.boardContext.upCount !== null && data.boardContext.upCount !== undefined
+                                ? `上涨 ${data.boardContext.upCount} / 下跌 ${data.boardContext.downCount ?? 0}`
+                                : '暂无涨跌家数'}
+                            </div>
+                            <div className="mt-2 text-xs leading-5 text-slate-400">
+                              {data.boardContext.netInflow !== null && data.boardContext.netInflow !== undefined
+                                ? `资金净流入 ${data.boardContext.netInflow.toFixed(2)} 亿`
+                                : '暂无净流入数据'}
+                            </div>
+                          </div>
                         </div>
+                        {data.boardContext.linkedStocks.length > 0 ? (
+                          <div className="space-y-3">
+                            <div className="text-sm font-semibold text-slate-200">同板块联动票</div>
+                            <div className="grid gap-3">
+                              {data.boardContext.linkedStocks.map((stock) => (
+                                <div key={`${stock.code}-${stock.name}`} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <div className="text-sm font-semibold text-white">
+                                        {stock.name}
+                                        {stock.code ? <span className="ml-2 text-xs text-slate-500">{stock.code}</span> : null}
+                                      </div>
+                                      <Badge className={boardRoleChipClass(stock.role)}>{stock.role}</Badge>
+                                    </div>
+                                    {stock.pct !== null && stock.pct !== undefined ? (
+                                      <div className={`text-sm font-semibold ${priceTextClass(stock.pct)}`}>{percentText(stock.pct)}</div>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-2 text-sm leading-6 text-slate-300">{stock.reason}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </CardContent>
                     </Card>
                   ) : null}
 
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                  <Card className="rounded-[30px] border-transparent bg-transparent text-white shadow-none">
                     <CardHeader className="border-b border-white/10 pb-5">
                       <div className="flex items-start gap-3">
                         <Zap className="h-5 w-5 text-amber-300" />
@@ -2154,18 +2335,10 @@ export default function StockHighlightsPrototype() {
                       ) : (
                         <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
                           {verificationSignals.map((signal, index) => {
-                            const SignalContainer = signal.news.url ? 'a' : 'div';
                             return (
-                            <SignalContainer
+                            <div
                               key={`${signal.label}-${signal.news.url}-${index}`}
                               className="block px-4 py-4 transition hover:bg-white/[0.03]"
-                              {...(signal.news.url
-                                ? {
-                                    href: signal.news.url,
-                                    target: '_blank',
-                                    rel: 'noreferrer',
-                                  }
-                                : {})}
                             >
                               <div className={index > 0 ? 'border-t border-white/10 pt-4' : ''}>
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -2190,14 +2363,15 @@ export default function StockHighlightsPrototype() {
                                   <span>{signal.news.time}</span>
                                 </div>
                                 <div className="mt-2 text-sm leading-6 text-slate-300">{signal.description}</div>
-                                <div className="mt-2 text-sm font-medium leading-6 text-white">{signal.news.title}</div>
-                                {signal.news.url ? (
-                                  <div className="mt-3 inline-flex items-center gap-1 text-xs text-cyan-300">
-                                    打开来源 <ExternalLink className="h-3.5 w-3.5" />
-                                  </div>
-                                ) : null}
+                                <div className="mt-2">
+                                  <SourceTitleLink
+                                    title={signal.news.title}
+                                    url={signal.news.url}
+                                    className="text-sm font-medium leading-6 text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
+                                  />
+                                </div>
                               </div>
-                            </SignalContainer>
+                            </div>
                           )})}
                         </div>
                       )}
@@ -2235,10 +2409,10 @@ export default function StockHighlightsPrototype() {
       <TurningPointsDialog open={turningPointsOpen} onOpenChange={setTurningPointsOpen} groups={turningPointGroups} />
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
+        <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-xl`}>
           <DialogHeader>
             <DialogTitle>使用说明</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-slate-300">
               这个应用只服务短线观察，不追求做成大而全的资讯门户。
             </DialogDescription>
           </DialogHeader>
@@ -2253,7 +2427,7 @@ export default function StockHighlightsPrototype() {
       </Dialog>
 
       <Dialog open={aiInsightOpen} onOpenChange={setAiInsightOpen}>
-        <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
+        <DialogContent className={`${DIALOG_BASE_CLASS} sm:max-w-xl`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span>AI 研判详情</span>
@@ -2263,15 +2437,15 @@ export default function StockHighlightsPrototype() {
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">模型配置</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">模型配置</div>
                 <div className="mt-2 font-medium text-white">{data?.analysisProfileLabel || activeProfile.label}</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">执行模型</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">执行模型</div>
                 <div className="mt-2 font-medium text-white">{data?.analysisModel || '尚未返回'}</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">最近更新</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">最近更新</div>
                 <div className="mt-2 font-medium text-white">{data?.analysisUpdatedAt || '等待生成'}</div>
               </div>
             </div>
@@ -2285,15 +2459,15 @@ export default function StockHighlightsPrototype() {
             {data ? (
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">AI 排序亮点</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-slate-400">AI 排序亮点</div>
                   <div className="mt-2 text-sm font-medium text-white">{data.aiTopPositiveLabel || '未单独挑出'}</div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">AI 排序风险</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-slate-400">AI 排序风险</div>
                   <div className="mt-2 text-sm font-medium text-white">{data.aiTopRiskLabel || '未单独挑出'}</div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">AI 转折点</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-slate-400">AI 转折点</div>
                   <div className="mt-2 text-sm font-medium text-white">{data.aiTurningPoint || '等待生成'}</div>
                 </div>
               </div>

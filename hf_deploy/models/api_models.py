@@ -55,15 +55,28 @@ class NewsItem(BaseModel):
     tag: Optional[str] = None
 
 
+class BoardLinkedStock(BaseModel):
+    code: str
+    name: str
+    pct: Optional[float] = None
+    role: str
+    reason: str
+
+
 class BoardContext(BaseModel):
     industry: str
     boardName: Optional[str] = None
     boardPct: Optional[float] = None
     boardRank: Optional[int] = None
+    upCount: Optional[int] = None
+    downCount: Optional[int] = None
+    netInflow: Optional[float] = None
     leader: Optional[str] = None
     leaderPct: Optional[float] = None
     role: str
+    roleReason: Optional[str] = None
     summary: str
+    linkedStocks: List[BoardLinkedStock] = Field(default_factory=list)
 
 
 class RadarPoint(BaseModel):

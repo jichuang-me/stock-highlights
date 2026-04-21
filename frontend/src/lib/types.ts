@@ -48,15 +48,28 @@ export type NewsItem = {
   tag?: string | null;
 };
 
+export type BoardLinkedStock = {
+  code: string;
+  name: string;
+  pct?: number | null;
+  role: string;
+  reason: string;
+};
+
 export type BoardContext = {
   industry: string;
   boardName?: string | null;
   boardPct?: number | null;
   boardRank?: number | null;
+  upCount?: number | null;
+  downCount?: number | null;
+  netInflow?: number | null;
   leader?: string | null;
   leaderPct?: number | null;
   role: string;
+  roleReason?: string | null;
   summary: string;
+  linkedStocks: BoardLinkedStock[];
 };
 
 export type RadarPoint = {

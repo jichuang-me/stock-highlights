@@ -3,7 +3,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from difflib import SequenceMatcher
 from functools import lru_cache
 from io import StringIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 try:
     import akshare as ak
@@ -48,6 +50,34 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _safe_optional_float(value: Any) -> Optional[float]:
+    text = str(value or "").strip()
+    if not text or text in {"--", "-", "None", "nan"}:
+        return None
+    text = (
+        text.replace("%", "")
+        .replace("亿", "")
+        .replace("万", "")
+        .replace(",", "")
+        .replace("+", "")
+        .strip()
+    )
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_optional_int(value: Any) -> Optional[int]:
+    text = str(value or "").strip()
+    if not text or text in {"--", "-", "None", "nan"}:
+        return None
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return None
+
+
 def _normalize_board_text(value: Any) -> str:
     text = str(value or "").strip().lower()
     for token in ("行业", "板块", "概念", "申万", "同花顺", " ", "-", "_", "/", "\\", "、", "·", "（", "）", "(", ")"):
@@ -78,6 +108,23 @@ def _load_board_names() -> List[str]:
     except Exception as exc:
         logging.warning("THS board names fetch failed: %s", exc)
         return []
+
+
+@lru_cache(maxsize=1)
+def _load_board_code_map() -> Dict[str, str]:
+    if ak is None:
+        return {}
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            names_df = ak.stock_board_industry_name_ths()
+        return {
+            str(row.get("name") or "").strip(): str(row.get("code") or "").strip()
+            for _, row in names_df.iterrows()
+            if str(row.get("name") or "").strip() and str(row.get("code") or "").strip()
+        }
+    except Exception as exc:
+        logging.warning("THS board code map fetch failed: %s", exc)
+        return {}
 
 
 @lru_cache(maxsize=1)
@@ -221,6 +268,179 @@ def _pick_board_row(candidates: List[str], rows: List[Dict[str, Any]]) -> Dict[s
 
 
 @lru_cache(maxsize=128)
+def _load_board_detail(board_name: str) -> Dict[str, Any]:
+    if ak is None or not board_name:
+        return {}
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            info_df = ak.stock_board_industry_info_ths(symbol=board_name)
+    except Exception as exc:
+        logging.warning("THS board detail fetch failed for %s: %s", board_name, exc)
+        return {}
+
+    if info_df is None or info_df.empty:
+        return {}
+
+    info_map = {
+        str(row.get("项目") or "").strip(): str(row.get("值") or "").strip()
+        for _, row in info_df.iterrows()
+        if str(row.get("项目") or "").strip()
+    }
+
+    up_count = None
+    down_count = None
+    rise_fall_text = info_map.get("涨跌家数", "")
+    if rise_fall_text and "/" in rise_fall_text:
+        left, right = rise_fall_text.split("/", 1)
+        up_count = _safe_optional_int(left)
+        down_count = _safe_optional_int(right)
+
+    rank_value = None
+    rank_text = info_map.get("涨幅排名", "")
+    if rank_text:
+        rank_value = _safe_optional_int(rank_text.split("/", 1)[0])
+
+    return {
+        "boardPct": _safe_optional_float(info_map.get("板块涨幅")),
+        "boardRank": rank_value,
+        "upCount": up_count,
+        "downCount": down_count,
+        "netInflow": _safe_optional_float(info_map.get("资金净流入(亿)")),
+    }
+
+
+@lru_cache(maxsize=128)
+def _load_board_constituents(board_name: str) -> List[Dict[str, Any]]:
+    if not board_name:
+        return []
+
+    board_code = _load_board_code_map().get(board_name)
+    if not board_code:
+        return []
+
+    url = f"https://q.10jqka.com.cn/thshy/detail/code/{board_code}/"
+    try:
+        response = HTTP_SESSION.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
+        tables = pd.read_html(StringIO(response.text))
+    except Exception as exc:
+        logging.warning("THS board constituents fetch failed for %s: %s", board_name, exc)
+        return []
+
+    if not tables:
+        return []
+
+    df = tables[0].copy()
+    required = {"代码", "名称", "涨跌幅(%)"}
+    if not required.issubset(set(df.columns)):
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for _, row in df.iterrows():
+        code = str(row.get("代码") or "").strip()
+        name = str(row.get("名称") or "").strip()
+        if not name:
+            continue
+        rows.append(
+            {
+                "code": code.zfill(6) if code.isdigit() else code,
+                "name": name,
+                "pct": _safe_optional_float(row.get("涨跌幅(%)")),
+            }
+        )
+
+    rows.sort(key=lambda item: item.get("pct") if item.get("pct") is not None else -9999, reverse=True)
+    return rows
+
+
+def _classify_board_role(
+    stock_name: str,
+    pct_change: float,
+    board_pct: float,
+    leader: Optional[str],
+    leader_pct: Optional[float],
+    current_rank: Optional[int],
+    total_count: int,
+) -> tuple[str, str]:
+    rank_is_front = current_rank is not None and current_rank <= max(2, min(5, total_count // 6 if total_count else 2))
+    stronger_than_board = pct_change >= board_pct + 0.8
+    weaker_than_board = pct_change <= board_pct - 1.0
+
+    if leader and leader == stock_name:
+        return "领涨", "当前个股就是同板块里最强辨识度，板块情绪和资金会先围绕它定价。"
+    if rank_is_front and stronger_than_board:
+        return "补涨", "当前个股明显强于板块均值，但还不是最强龙头，更像板块内的补涨强化。"
+    if weaker_than_board or (current_rank is not None and total_count > 0 and current_rank >= max(total_count - 2, int(total_count * 0.75))):
+        return "掉队", "板块本身并非最弱，但这只票明显落后于同板块节奏，短线承接偏弱。"
+    if leader_pct is not None and pct_change >= leader_pct - 1.2 and pct_change > 0:
+        return "补涨", "板块内部已经出现更强龙头，这只票更像顺着板块强势做补涨跟进。"
+    return "跟随", "当前更像跟随同板块节奏，既不是领涨核心，也没有明显掉队。"
+
+
+def _build_linked_stocks(
+    constituents: List[Dict[str, Any]],
+    code: str,
+    stock_name: str,
+    pct_change: float,
+    board_pct: float,
+    current_role: str,
+) -> List[Dict[str, Any]]:
+    linked: List[Dict[str, Any]] = []
+    seen = set()
+
+    def add_row(row: Optional[Dict[str, Any]], role: str, reason: str) -> None:
+        if not row:
+            return
+        key = row.get("code") or row.get("name")
+        if not key or key in seen:
+            return
+        seen.add(key)
+        linked.append(
+            {
+                "code": row.get("code") or "",
+                "name": row.get("name") or "",
+                "pct": row.get("pct"),
+                "role": role,
+                "reason": reason,
+            }
+        )
+
+    current_row = next((item for item in constituents if item.get("code") == code or item.get("name") == stock_name), None)
+    leader_row = constituents[0] if constituents else None
+    peer_rows = [item for item in constituents if item is not leader_row and item is not current_row]
+
+    add_row(
+        current_row
+        or {
+            "code": code,
+            "name": stock_name,
+            "pct": pct_change,
+        },
+        current_role,
+        "这是当前个股在同板块链条里的位置判断。",
+    )
+    add_row(
+        leader_row,
+        "领涨",
+        "当前板块最强辨识度，适合作为主线风向标。",
+    )
+
+    for row in peer_rows:
+        pct = row.get("pct")
+        if pct is None:
+            continue
+        if pct >= board_pct + 0.8:
+            add_row(row, "补涨", "强于板块均值，适合作为补涨和扩散观察对象。")
+        elif pct <= board_pct - 1.0:
+            add_row(row, "掉队", "明显弱于板块均值，适合作为链条转弱的对照。")
+        else:
+            add_row(row, "跟随", "更像跟随板块平均节奏，可用来观察链条是否同步。")
+        if len(linked) >= 4:
+            break
+
+    return linked[:4]
+
+
+@lru_cache(maxsize=128)
 def fetch_sina_prices(codes: str) -> Dict[str, Any]:
     if not codes:
         return {}
@@ -294,10 +514,15 @@ def fetch_board_context(code: str, stock_name: str, pct_change: float, industry_
             "boardName": None,
             "boardPct": None,
             "boardRank": None,
+            "upCount": None,
+            "downCount": None,
+            "netInflow": None,
             "leader": None,
             "leaderPct": None,
             "role": "暂无链条映射",
+            "roleReason": "当前环境未启用板块映射依赖，先看个股主线和证据链。",
             "summary": "当前环境未启用板块映射依赖，先看个股主线和证据链。",
+            "linkedStocks": [],
         }
 
     candidates = _extract_industry_candidates(code, industry_hint)
@@ -311,57 +536,109 @@ def fetch_board_context(code: str, stock_name: str, pct_change: float, industry_
             "boardName": industry or None,
             "boardPct": None,
             "boardRank": None,
+            "upCount": None,
+            "downCount": None,
+            "netInflow": None,
             "leader": None,
             "leaderPct": None,
             "role": "行业跟踪中" if industry else "暂无链条映射",
+            "roleReason": (
+                f"先按“{industry}”这条行业链观察，强弱和联动票映射还没完全确认。"
+                if industry
+                else "暂时还没稳定识别所属行业，先看个股主线和证据链。"
+            ),
             "summary": (
                 f"当前先按“{industry}”这条行业链跟踪，板块强弱和领涨映射暂时还没完全匹配上。"
                 if industry
                 else "暂时还没稳定识别出所属行业，先看个股主线和证据链。"
             ),
+            "linkedStocks": [],
         }
 
-    board_pct = _safe_float(matched_row.get("boardPct"))
-    board_rank = _safe_int(matched_row.get("boardRank"))
-    leader = matched_row.get("leader")
-    leader_pct = _safe_float(matched_row.get("leaderPct")) if matched_row.get("leader") else None
-    if board_pct == 0.0 and not matched_row.get("boardRank") and not leader:
-        board_pct = _fetch_board_pct_from_history(str(matched_row.get("boardName") or industry))
+    board_name = str(matched_row.get("boardName") or industry)
+    board_detail = _load_board_detail(board_name)
+    constituents = _load_board_constituents(board_name)
 
-    if leader and leader == stock_name:
-        role = "领涨"
-    elif pct_change >= board_pct + 1.5:
-        role = "强于板块"
-    elif pct_change <= board_pct - 1.5:
-        role = "掉队"
-    else:
-        role = "跟随"
+    board_pct = _safe_optional_float(matched_row.get("boardPct"))
+    if board_pct is None:
+        board_pct = board_detail.get("boardPct")
+    if board_pct is None:
+        board_pct = _fetch_board_pct_from_history(board_name)
 
-    summary = f"所属行业映射到“{industry}”，当前板块涨跌幅 {board_pct:+.2f}%"
-    if board_rank > 0:
-        summary += f"，行业热度第 {board_rank} 位"
-    summary += "。"
+    board_rank = _safe_optional_int(matched_row.get("boardRank"))
+    if board_rank is None:
+        board_rank = board_detail.get("boardRank")
+
+    leader = matched_row.get("leader") or (constituents[0].get("name") if constituents else None)
+    leader_pct = _safe_optional_float(matched_row.get("leaderPct"))
+    if leader_pct is None and constituents:
+        leader_pct = constituents[0].get("pct")
+
+    up_count = board_detail.get("upCount")
+    down_count = board_detail.get("downCount")
+    net_inflow = board_detail.get("netInflow")
+
+    current_rank = next(
+        (
+            index + 1
+            for index, row in enumerate(constituents)
+            if row.get("code") == code or row.get("name") == stock_name
+        ),
+        None,
+    )
+
+    role, role_reason = _classify_board_role(
+        stock_name=stock_name,
+        pct_change=pct_change,
+        board_pct=board_pct or 0.0,
+        leader=leader,
+        leader_pct=leader_pct,
+        current_rank=current_rank,
+        total_count=len(constituents),
+    )
+
+    linked_stocks = _build_linked_stocks(
+        constituents=constituents,
+        code=code,
+        stock_name=stock_name,
+        pct_change=pct_change,
+        board_pct=board_pct or 0.0,
+        current_role=role,
+    )
+
+    summary_parts = [
+        f"所属行业映射到“{industry}”",
+        f"当前板块涨跌幅 {board_pct:+.2f}%",
+    ]
+    if board_rank:
+        summary_parts.append(f"行业热度第 {board_rank} 位")
+    if up_count is not None and down_count is not None:
+        summary_parts.append(f"上涨/下跌家数 {up_count}/{down_count}")
+    if net_inflow is not None:
+        summary_parts.append(f"资金净流入 {net_inflow:+.2f} 亿")
     if leader:
-        summary += f" 当前领涨股是 {leader}"
+        leader_text = f"当前领涨股是 {leader}"
         if leader_pct is not None:
-            summary += f"（{leader_pct:+.2f}%）"
-        summary += "。"
-    if role == "领涨":
-        summary += " 这只票本身就是当前板块里最强的辨识度。"
-    elif role == "强于板块":
-        summary += " 这只票当前强于所属板块，更像主动强化。"
-    elif role == "掉队":
-        summary += " 这只票当前弱于所属板块，板块热度未必能直接传导到它。"
+            leader_text += f"（{leader_pct:+.2f}%）"
+        summary_parts.append(leader_text)
+    if current_rank:
+        summary_parts.append(f"这只票当前排在同板块第 {current_rank} 位，更像“{role}”")
     else:
-        summary += " 这只票当前更像跟随板块节奏。"
+        summary_parts.append(f"当前更像“{role}”")
+    summary = "，".join(summary_parts) + "。"
 
     return {
         "industry": industry,
-        "boardName": matched_row.get("boardName") or industry,
+        "boardName": board_name,
         "boardPct": board_pct,
-        "boardRank": board_rank if board_rank > 0 else None,
+        "boardRank": board_rank if board_rank and board_rank > 0 else None,
+        "upCount": up_count,
+        "downCount": down_count,
+        "netInflow": net_inflow,
         "leader": leader,
         "leaderPct": leader_pct,
         "role": role,
+        "roleReason": role_reason,
         "summary": summary,
+        "linkedStocks": linked_stocks,
     }
