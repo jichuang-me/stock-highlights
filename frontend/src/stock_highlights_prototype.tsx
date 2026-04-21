@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
   Bot,
@@ -921,6 +921,7 @@ export default function StockHighlightsPrototype() {
   const [listsExpanded, setListsExpanded] = useState(true);
   const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(DEFAULT_MODEL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState(DEFAULT_MODEL_PROFILES[0].id);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const { results, loading: searchLoading, error: searchError } = useStockSearch(query);
   const activeProfile =
@@ -955,6 +956,36 @@ export default function StockHighlightsPrototype() {
       window.localStorage.removeItem(MODEL_PROFILES_KEY);
       window.localStorage.removeItem(ACTIVE_MODEL_PROFILE_KEY);
     }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key.length !== 1 || /\s/.test(event.key)) {
+        return;
+      }
+
+      searchInputRef.current?.focus();
+      setQuery((current) => `${current}${event.key}`);
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   const displayStock = useMemo(() => {
@@ -1130,6 +1161,7 @@ export default function StockHighlightsPrototype() {
                     <Search className="h-4 w-4" />
                   </div>
                   <Input
+                    ref={searchInputRef}
                     className="h-10 rounded-2xl border-white/10 bg-slate-950 text-white placeholder:text-slate-500"
                     placeholder="输入股票代码或简称，例如 600519、贵州茅台"
                     value={query}
