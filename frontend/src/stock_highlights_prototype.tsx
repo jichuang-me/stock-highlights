@@ -596,12 +596,6 @@ function getEmotionDrivers(data: StockHighlightsResponse, phaseInfo: ReturnType<
 
   const drivers = [
     {
-      label: '情绪阶段',
-      value: phaseInfo?.label || '观察中',
-      tone: phaseInfo?.tone === 'hot' ? 'text-red-300' : phaseInfo?.tone === 'cold' ? 'text-emerald-300' : 'text-amber-300',
-      description: phaseInfo?.reason || '当前还没有形成足够强的一致预期。',
-    },
-    {
       label: '人气与关注',
       value: `${popularity}`,
       tone: popularity >= 60 ? 'text-red-300' : 'text-slate-200',
