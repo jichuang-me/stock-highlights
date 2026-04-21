@@ -1089,7 +1089,7 @@ export default function StockHighlightsPrototype() {
       }
 
       searchInputRef.current?.focus();
-      setQuery((current) => `${current}${event.key}`);
+      setQuery(event.key);
       event.preventDefault();
     };
 
