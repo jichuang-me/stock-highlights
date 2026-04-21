@@ -148,6 +148,18 @@ function priceBadgeClass(value: number) {
   return 'border-slate-500/20 bg-slate-500/12 text-slate-300';
 }
 
+function shortlineScoreClass(tone?: 'strong' | 'watch' | 'weak') {
+  if (tone === 'strong') return 'border-red-400/20 bg-red-500/12 text-red-300';
+  if (tone === 'watch') return 'border-amber-400/20 bg-amber-500/12 text-amber-300';
+  return 'border-emerald-400/20 bg-emerald-500/12 text-emerald-300';
+}
+
+function inlineInsightChipClass(kind: 'positive' | 'risk' | 'turning') {
+  if (kind === 'positive') return 'border-red-400/20 bg-red-500/10 text-red-200';
+  if (kind === 'risk') return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200';
+  return 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200';
+}
+
 function getSentimentStage(data: StockHighlightsResponse) {
   if (data.summary.sentiment === 'positive') {
     if (data.pctChange >= 5) {
@@ -1618,8 +1630,8 @@ export default function StockHighlightsPrototype() {
             {data && displayStock && !loading ? (
               <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
                 <section className="space-y-6">
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-4 border-b border-white/10 pb-4">
+                  <div className="space-y-4 text-white">
+                    <div className="space-y-4">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-3">
@@ -1641,15 +1653,71 @@ export default function StockHighlightsPrototype() {
                               <Star className={`h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
                             </button>
                           </div>
-                          <div className="text-sm text-slate-400">
-                            {displayStock.code} · {displayStock.industry}
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
+                            <div>
+                              {displayStock.code} · {displayStock.industry}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:border-white/25 ${inlineInsightChipClass('positive')} ${
+                                  topPositiveHighlight ? '' : 'cursor-default opacity-70'
+                                }`}
+                                disabled={!topPositiveHighlight}
+                                onClick={() => topPositiveHighlight && setActiveHighlight(topPositiveHighlight)}
+                              >
+                                <span>亮点</span>
+                                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] leading-none">
+                                  {data.summary.positiveCount}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:border-white/25 ${inlineInsightChipClass('risk')} ${
+                                  topRiskHighlight ? '' : 'cursor-default opacity-70'
+                                }`}
+                                disabled={!topRiskHighlight}
+                                onClick={() => topRiskHighlight && setActiveHighlight(topRiskHighlight)}
+                              >
+                                <span>风险</span>
+                                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] leading-none">
+                                  {data.summary.riskCount}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:border-white/25 ${inlineInsightChipClass('turning')} ${
+                                  turningPointGroups.upgrade.length +
+                                    turningPointGroups.downgrade.length +
+                                    turningPointGroups.invalidation.length >
+                                  0
+                                    ? ''
+                                    : 'opacity-70'
+                                }`}
+                                onClick={() => setTurningPointsOpen(true)}
+                              >
+                                <span>转折点</span>
+                                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] leading-none">
+                                  {turningPointGroups.upgrade.length +
+                                    turningPointGroups.downgrade.length +
+                                    turningPointGroups.invalidation.length}
+                                </span>
+                              </button>
+                            </div>
                           </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge className="border-white/10 bg-white/5 text-slate-200">
-                            {sentimentLabel(data.summary.sentiment)}
-                          </Badge>
+                          <button
+                            type="button"
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition hover:border-white/25 ${shortlineScoreClass(
+                              shortlineSignal?.tone,
+                            )}`}
+                            onClick={() => setSignalOpen(true)}
+                          >
+                            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-100/80">短线态势分</span>
+                            <span className="text-base font-semibold">{shortlineSignal?.score ?? '--'}</span>
+                          </button>
                           <button
                             type="button"
                             className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
@@ -1729,10 +1797,8 @@ export default function StockHighlightsPrototype() {
                           </div>
                         ) : null}
                       </div>
-                    </CardHeader>
-
-                    <CardContent className="pt-5" />
-                  </Card>
+                    </div>
+                  </div>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
                     <CardHeader className="space-y-3 border-b border-white/10 pb-5">
@@ -1866,59 +1932,13 @@ export default function StockHighlightsPrototype() {
                 </section>
 
                 <section className="space-y-6">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4">
                     <SummaryTile
                       title="当前情绪"
                       value={sentimentLabel(data.summary.sentiment)}
                       helper={`${stageInfo?.title || '观察中'} · ${phaseInfo?.label || '观察中'}，点开看完整拆解。`}
                       onClick={() => setEmotionOpen(true)}
                       tone="amber"
-                    />
-                    <SummaryTile
-                      title="短线态势分"
-                      value={String(shortlineSignal?.score ?? '--')}
-                      helper={`主线${mainlineStrength?.label || shortlineSignal?.title || '待确认'}，点开看详细解释。`}
-                      onClick={() => setSignalOpen(true)}
-                      tone={
-                        shortlineSignal?.tone === 'strong'
-                          ? 'red'
-                          : shortlineSignal?.tone === 'watch'
-                            ? 'amber'
-                            : 'neutral'
-                      }
-                    />
-                    <SummaryTile
-                      title="亮点"
-                      value={String(data.summary.positiveCount)}
-                      helper={
-                        topPositiveHighlight
-                          ? `${topPositiveHighlight.label}，点开直达证据链。`
-                          : '当前没有明确亮点。'
-                      }
-                      onClick={topPositiveHighlight ? () => setActiveHighlight(topPositiveHighlight) : undefined}
-                      tone="red"
-                    />
-                    <SummaryTile
-                      title="风险"
-                      value={String(data.summary.riskCount)}
-                      helper={
-                        topRiskHighlight
-                          ? `${topRiskHighlight.label}，点开直达证据链。`
-                          : '当前没有明确风险。'
-                      }
-                      onClick={topRiskHighlight ? () => setActiveHighlight(topRiskHighlight) : undefined}
-                      tone="emerald"
-                    />
-                    <SummaryTile
-                      title="观察转折点"
-                      value={String(
-                        turningPointGroups.upgrade.length +
-                          turningPointGroups.downgrade.length +
-                          turningPointGroups.invalidation.length,
-                      )}
-                      helper={data.aiTurningPoint || turningPointGroups.upgrade[0] || '暂时没有新的转折观察点。'}
-                      onClick={() => setTurningPointsOpen(true)}
-                      tone="cyan"
                     />
                   </div>
 
@@ -1935,7 +1955,7 @@ export default function StockHighlightsPrototype() {
                     <CardContent className="space-y-5 pt-6">
                       {data.liveNews.length === 0 ? (
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-400">
-                          暂无实时快讯。
+                          暂无外部快讯，先看最新证据补位。
                         </div>
                       ) : verificationSignals.length === 0 ? (
                         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-400">
@@ -1943,13 +1963,19 @@ export default function StockHighlightsPrototype() {
                         </div>
                       ) : (
                         <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
-                          {verificationSignals.map((signal, index) => (
-                            <a
+                          {verificationSignals.map((signal, index) => {
+                            const SignalContainer = signal.news.url ? 'a' : 'div';
+                            return (
+                            <SignalContainer
                               key={`${signal.label}-${signal.news.url}-${index}`}
                               className="block px-4 py-4 transition hover:bg-white/[0.03]"
-                              href={signal.news.url}
-                              target="_blank"
-                              rel="noreferrer"
+                              {...(signal.news.url
+                                ? {
+                                    href: signal.news.url,
+                                    target: '_blank',
+                                    rel: 'noreferrer',
+                                  }
+                                : {})}
                             >
                               <div className={index > 0 ? 'border-t border-white/10 pt-4' : ''}>
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -1971,8 +1997,8 @@ export default function StockHighlightsPrototype() {
                                 <div className="mt-2 text-sm leading-6 text-slate-300">{signal.description}</div>
                                 <div className="mt-2 text-sm font-medium leading-6 text-white">{signal.news.title}</div>
                               </div>
-                            </a>
-                          ))}
+                            </SignalContainer>
+                          )})}
                         </div>
                       )}
                     </CardContent>

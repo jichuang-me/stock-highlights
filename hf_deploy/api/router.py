@@ -61,7 +61,7 @@ def _extract_ai_profile(request: Request) -> Optional[Dict[str, str]]:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.11.0"}
+    return {"status": "ok", "version": "v4.12.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -81,6 +81,45 @@ def _build_rule_market_impression(highlights: List[dict], hotness: dict, indicat
         f"当前尚未识别到强驱动公告。"
         f" 市场关注度 {hotness['rank']}，PE {indicators['pe']}，ROE {indicators['roe']}。"
     )
+
+
+def _build_news_fallback(highlights: List[dict], stock_price: dict) -> List[dict]:
+    items: List[dict] = []
+    seen_titles = set()
+
+    for item in highlights:
+        for evidence in item.get("evidence", []):
+            title = (evidence.get("title") or "").strip()
+            if not title or title in seen_titles:
+                continue
+            seen_titles.add(title)
+            items.append(
+                {
+                    "title": f"{item['label']}：{title}",
+                    "time": evidence.get("published_at") or "最新",
+                    "url": evidence.get("url") or "",
+                    "source": evidence.get("source") or "公告补位",
+                    "tag": "证据补位",
+                }
+            )
+            if len(items) >= 3:
+                return items
+
+    price = float(stock_price.get("price") or 0)
+    pct = float(stock_price.get("pct") or 0)
+    if price:
+        direction = "上涨" if pct > 0 else "下跌" if pct < 0 else "震荡"
+        items.append(
+            {
+                "title": f"盘面反馈：当前价 {price:.2f}，涨跌幅 {pct:+.2f}%，短线仍在等待新的外部快讯确认。",
+                "time": "当前",
+                "url": "",
+                "source": "行情反馈",
+                "tag": direction,
+            }
+        )
+
+    return items
 
 
 async def _build_highlights_response(
@@ -109,6 +148,7 @@ async def _build_highlights_response(
 
     stock_price = all_prices.get(code, {"price": 0.0, "pct": 0.0})
     highlights = analyze_highlights(raw_ann)
+    news = news or _build_news_fallback(highlights, stock_price)
 
     company_name = raw_ann[0].get("secName") if raw_ann else profile_info["name"]
     industry = profile_info["industry"] or None
