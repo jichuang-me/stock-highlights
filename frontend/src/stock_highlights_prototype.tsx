@@ -549,16 +549,36 @@ function SummaryTile({
   title,
   value,
   helper,
+  onClick,
 }: {
   title: string;
   value: string;
   helper: string;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+  const content = (
+    <>
       <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{title}</div>
       <div className="mt-3 text-3xl font-semibold text-white">{value}</div>
       <div className="mt-2 text-sm leading-6 text-slate-400">{helper}</div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-left transition hover:border-white/20 hover:bg-white/[0.05]"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+      {content}
     </div>
   );
 }
@@ -700,6 +720,92 @@ function HighlightDetailsDialog({
             </div>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmotionDetailsDialog({
+  open,
+  onOpenChange,
+  stageInfo,
+  phaseInfo,
+  emotionDrivers,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  stageInfo: ReturnType<typeof getSentimentStage> | null;
+  phaseInfo: ReturnType<typeof getShortlinePhase> | null;
+  emotionDrivers: ReturnType<typeof getEmotionDrivers> | null;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>当前情绪</DialogTitle>
+          <DialogDescription className="text-slate-400">把情绪阶段和拆解说明放到一处，不再重复展示。</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-lg font-semibold text-white">{stageInfo?.title || '观察中'}</div>
+              <Badge className={phaseBadgeClass(phaseInfo?.tone || 'neutral')}>{phaseInfo?.label || '观察中'}</Badge>
+            </div>
+            <div className="mt-3 text-sm leading-6 text-slate-300">{stageInfo?.description}</div>
+            {phaseInfo?.action ? <div className="mt-3 text-sm leading-6 text-slate-200">当前动作：{phaseInfo.action}</div> : null}
+          </div>
+
+          {emotionDrivers ? (
+            <>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-200">
+                {emotionDrivers.summary}
+              </div>
+              <div className="space-y-3">
+                {emotionDrivers.drivers.map((driver) => (
+                  <div key={driver.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold text-white">{driver.label}</div>
+                      <div className={`text-sm font-semibold ${driver.tone}`}>{driver.value}</div>
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-slate-300">{driver.description}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InsightDetailsDialog({
+  open,
+  onOpenChange,
+  title,
+  summary,
+  items,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  summary: string;
+  items: string[];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="text-slate-400">{summary}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div key={`${title}-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-300">
+              {item}
+            </div>
+          ))}
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -919,6 +1025,9 @@ export default function StockHighlightsPrototype() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [aiInsightOpen, setAiInsightOpen] = useState(false);
   const [listsExpanded, setListsExpanded] = useState(true);
+  const [emotionOpen, setEmotionOpen] = useState(false);
+  const [signalOpen, setSignalOpen] = useState(false);
+  const [turningPointsOpen, setTurningPointsOpen] = useState(false);
   const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(DEFAULT_MODEL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState(DEFAULT_MODEL_PROFILES[0].id);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -1039,6 +1148,14 @@ export default function StockHighlightsPrototype() {
   const primaryFocusHighlight = useMemo(
     () => [...focusHighlights].sort((left, right) => right.score - left.score)[0],
     [focusHighlights],
+  );
+  const topPositiveHighlight = useMemo(
+    () => sortedHighlights.find((item) => item.side === 'positive') || null,
+    [sortedHighlights],
+  );
+  const topRiskHighlight = useMemo(
+    () => sortedHighlights.find((item) => item.side === 'risk') || null,
+    [sortedHighlights],
   );
   const primaryCurrentKey = useMemo(
     () => getChainSegment(primaryFocusHighlight, '当前关键'),
@@ -1361,99 +1478,32 @@ export default function StockHighlightsPrototype() {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-                        <div className="rounded-[26px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(8,47,73,0.08))] p-5">
-                          <div className="mb-2 text-xs uppercase tracking-[0.22em] text-cyan-300">短线主线</div>
-                          <div className="text-2xl font-semibold text-white">
-                            {data.headline || 'AI 尚未生成主线，先看规则看点和快讯。'}
+                      <div className="rounded-[26px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(8,47,73,0.08))] p-5">
+                        <div className="mb-2 text-xs uppercase tracking-[0.22em] text-cyan-300">短线主线</div>
+                        <div className="text-2xl font-semibold text-white">
+                          {data.headline || 'AI 尚未生成主线，先看规则看点和快讯。'}
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-200">{data.marketImpression}</p>
+                        {primaryCurrentKey || primaryValidation ? (
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            {primaryCurrentKey ? (
+                              <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">当前关键证据</div>
+                                <div className="mt-2 text-sm leading-6 text-slate-100">{primaryCurrentKey}</div>
+                              </div>
+                            ) : null}
+                            {primaryValidation ? (
+                              <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">后续验证</div>
+                                <div className="mt-2 text-sm leading-6 text-slate-100">{primaryValidation}</div>
+                              </div>
+                            ) : null}
                           </div>
-                          <p className="mt-3 text-sm leading-6 text-slate-200">{data.marketImpression}</p>
-                          {primaryCurrentKey || primaryValidation ? (
-                            <div className="mt-4 grid gap-3 md:grid-cols-2">
-                              {primaryCurrentKey ? (
-                                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">当前关键证据</div>
-                                  <div className="mt-2 text-sm leading-6 text-slate-100">{primaryCurrentKey}</div>
-                                </div>
-                              ) : null}
-                              {primaryValidation ? (
-                                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">后续验证</div>
-                                  <div className="mt-2 text-sm leading-6 text-slate-100">{primaryValidation}</div>
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
-                          <div className="text-xs uppercase tracking-[0.22em] text-slate-500">情绪位置</div>
-                          <div className="mt-3 text-xl font-semibold text-white">{stageInfo?.title}</div>
-                          <p className="mt-2 text-sm leading-6 text-slate-300">{stageInfo?.description}</p>
-                        </div>
+                        ) : null}
                       </div>
                     </CardHeader>
 
-                    <CardContent className="space-y-4 pt-5">
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <SummaryTile
-                          title="风险事件"
-                          value={String(data.summary.riskCount)}
-                          helper="优先识别会压制风险偏好的公告事件。"
-                        />
-                        <SummaryTile
-                          title="看点事件"
-                          value={String(data.summary.positiveCount)}
-                          helper="追踪能被市场继续买单的催化线索。"
-                        />
-                        <SummaryTile
-                          title="当前情绪"
-                          value={sentimentLabel(data.summary.sentiment)}
-                          helper="优先采用 AI 结论，无结果时回退到规则统计。"
-                        />
-                      </div>
-
-                      <div className="grid gap-4 xl:grid-cols-[0.72fr_0.88fr_0.88fr]">
-                        <div
-                          className={`rounded-[26px] border p-5 ${
-                            shortlineSignal?.tone === 'strong'
-                              ? 'border-red-400/20 bg-red-500/10'
-                              : shortlineSignal?.tone === 'watch'
-                                ? 'border-amber-400/20 bg-amber-500/10'
-                                : 'border-white/10 bg-slate-950/80'
-                          }`}
-                        >
-                          <div className="text-xs uppercase tracking-[0.22em] text-slate-400">短线态势分</div>
-                          <div className="mt-3 text-5xl font-semibold text-white">{shortlineSignal?.score ?? '--'}</div>
-                          <div className="mt-3 text-base font-medium text-white">{shortlineSignal?.title}</div>
-                          <p className="mt-3 text-sm leading-6 text-slate-300">{shortlineSignal?.summary}</p>
-                        </div>
-
-                        <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs uppercase tracking-[0.22em] text-slate-500">情绪阶段</div>
-                            <Badge className={phaseBadgeClass(phaseInfo?.tone || 'neutral')}>
-                              {phaseInfo?.label || '观察中'}
-                            </Badge>
-                          </div>
-                          <div className="mt-3 text-lg font-semibold text-white">{phaseInfo?.action}</div>
-                          <p className="mt-2 text-sm leading-6 text-slate-300">{phaseInfo?.reason}</p>
-                        </div>
-
-                        <div className="rounded-[26px] border border-white/10 bg-slate-950/80 p-5">
-                          <div className="text-xs uppercase tracking-[0.22em] text-slate-500">下一观察触发器</div>
-                          <div className="mt-4 space-y-3">
-                            {nextTriggers.slice(0, 4).map((item, index) => (
-                              <div key={`${item}-${index}`} className="flex gap-3">
-                                <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-300" />
-                                <div className="text-sm leading-6 text-slate-300">{item}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                    </CardContent>
+                    <CardContent className="pt-5" />
                   </Card>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
@@ -1588,41 +1638,46 @@ export default function StockHighlightsPrototype() {
                 </section>
 
                 <section className="space-y-6">
-                  <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
-                    <CardHeader className="space-y-3 border-b border-white/10 pb-5">
-                      <div className="flex items-center gap-3">
-                        {data.pctChange >= 0 ? (
-                          <TrendingUp className="h-5 w-5 text-red-300" />
-                        ) : (
-                          <TrendingDown className="h-5 w-5 text-emerald-300" />
-                        )}
-                        <div>
-                          <div className="text-lg font-semibold">情绪拆解</div>
-                          <div className="text-sm text-slate-400">把当前阶段拆成几个最影响短线预期的原因。</div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4 pt-6">
-                      {emotionDrivers ? (
-                        <>
-                          <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-                            <div className="text-sm leading-6 text-slate-200">{emotionDrivers.summary}</div>
-                          </div>
-                          <div className="space-y-3">
-                            {emotionDrivers.drivers.map((driver) => (
-                              <div key={driver.label} className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="text-sm font-semibold text-white">{driver.label}</div>
-                                  <div className={`text-sm font-semibold ${driver.tone}`}>{driver.value}</div>
-                                </div>
-                                <div className="mt-2 text-sm leading-6 text-slate-300">{driver.description}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      ) : null}
-                    </CardContent>
-                  </Card>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SummaryTile
+                      title="当前情绪"
+                      value={sentimentLabel(data.summary.sentiment)}
+                      helper={`${stageInfo?.title || '观察中'} · ${phaseInfo?.label || '观察中'}，点开看完整拆解。`}
+                      onClick={() => setEmotionOpen(true)}
+                    />
+                    <SummaryTile
+                      title="短线态势分"
+                      value={String(shortlineSignal?.score ?? '--')}
+                      helper={`${shortlineSignal?.title || '等待信号'}，点开看详细解释。`}
+                      onClick={() => setSignalOpen(true)}
+                    />
+                    <SummaryTile
+                      title="亮点"
+                      value={String(data.summary.positiveCount)}
+                      helper={
+                        topPositiveHighlight
+                          ? `${topPositiveHighlight.label}，点开直达证据链。`
+                          : '当前没有明确亮点。'
+                      }
+                      onClick={topPositiveHighlight ? () => setActiveHighlight(topPositiveHighlight) : undefined}
+                    />
+                    <SummaryTile
+                      title="风险"
+                      value={String(data.summary.riskCount)}
+                      helper={
+                        topRiskHighlight
+                          ? `${topRiskHighlight.label}，点开直达证据链。`
+                          : '当前没有明确风险。'
+                      }
+                      onClick={topRiskHighlight ? () => setActiveHighlight(topRiskHighlight) : undefined}
+                    />
+                    <SummaryTile
+                      title="观察转折点"
+                      value={String(nextTriggers.length)}
+                      helper={nextTriggers[0] || '暂时没有新的转折观察点。'}
+                      onClick={() => setTurningPointsOpen(true)}
+                    />
+                  </div>
 
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
                     <CardHeader className="space-y-3 border-b border-white/10 pb-5">
@@ -1687,6 +1742,31 @@ export default function StockHighlightsPrototype() {
       </div>
 
       <HighlightDetailsDialog item={activeHighlight} onClose={() => setActiveHighlight(null)} />
+      <EmotionDetailsDialog
+        open={emotionOpen}
+        onOpenChange={setEmotionOpen}
+        stageInfo={stageInfo}
+        phaseInfo={phaseInfo}
+        emotionDrivers={emotionDrivers}
+      />
+      <InsightDetailsDialog
+        open={signalOpen}
+        onOpenChange={setSignalOpen}
+        title="短线态势分"
+        summary={shortlineSignal?.summary || '当前还没有形成足够明确的短线态势说明。'}
+        items={[
+          `当前分值：${shortlineSignal?.score ?? '--'}`,
+          `当前判断：${shortlineSignal?.title || '等待信号'}`,
+          `解释：${shortlineSignal?.summary || '等待更多价格、消息和证据链确认。'}`,
+        ]}
+      />
+      <InsightDetailsDialog
+        open={turningPointsOpen}
+        onOpenChange={setTurningPointsOpen}
+        title="观察转折点"
+        summary="这里不看重复信息，只看最值得盯的下一步变化。"
+        items={nextTriggers.length > 0 ? nextTriggers : ['暂时没有新的转折观察点。']}
+      />
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="rounded-3xl border-slate-200 bg-white sm:max-w-xl">
