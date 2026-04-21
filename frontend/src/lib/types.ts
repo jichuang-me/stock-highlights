@@ -48,6 +48,17 @@ export type NewsItem = {
   tag?: string | null;
 };
 
+export type BoardContext = {
+  industry: string;
+  boardName?: string | null;
+  boardPct?: number | null;
+  boardRank?: number | null;
+  leader?: string | null;
+  leaderPct?: number | null;
+  role: string;
+  summary: string;
+};
+
 export type RadarPoint = {
   k: string;
   v: number;
@@ -70,6 +81,7 @@ export type StockHighlightsResponse = {
   pctChange: number;
   highlights: HighlightItem[];
   liveNews: NewsItem[];
+  boardContext?: BoardContext | null;
   radar: RadarPoint[];
 };
 

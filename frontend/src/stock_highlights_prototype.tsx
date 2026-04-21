@@ -160,6 +160,28 @@ function inlineInsightChipClass(kind: 'positive' | 'risk' | 'turning') {
   return 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200';
 }
 
+function emotionChipClass(tone?: 'hot' | 'warm' | 'cold' | 'neutral') {
+  if (tone === 'hot') return 'border-red-400/20 bg-red-500/10 text-red-200';
+  if (tone === 'warm') return 'border-amber-400/20 bg-amber-500/10 text-amber-200';
+  if (tone === 'cold') return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200';
+  return 'border-slate-500/20 bg-slate-500/10 text-slate-200';
+}
+
+function parseNewsTime(value: string) {
+  const normalized = value.trim().replace(/\./g, '-');
+  const timestamp = Date.parse(normalized.replace(' ', 'T'));
+  if (Number.isFinite(timestamp)) {
+    return timestamp;
+  }
+  const monthDay = normalized.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
+  if (monthDay) {
+    const year = new Date().getFullYear();
+    const [, month, day, hour, minute] = monthDay;
+    return new Date(year, Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+  }
+  return 0;
+}
+
 function getSentimentStage(data: StockHighlightsResponse) {
   if (data.summary.sentiment === 'positive') {
     if (data.pctChange >= 5) {
@@ -596,6 +618,51 @@ function getVerificationSignals(linkedNews: ReturnType<typeof linkNewsToFocus>) 
   return signals.slice(0, 3);
 }
 
+function getMainlineTimeline(
+  highlight: HighlightItem | null | undefined,
+  verificationSignals: VerificationSignal[],
+  pctChange: number,
+) {
+  const items: Array<{ time: string; title: string; detail: string; tone: 'cyan' | 'red' | 'emerald' | 'amber' }> = [];
+  if (!highlight) {
+    return items;
+  }
+
+  highlight.evidenceChain.forEach((chainItem) => {
+    if (chainItem.startsWith('起点')) {
+      items.push({ time: '起点', title: '主线触发', detail: chainItem.replace('起点：', ''), tone: 'cyan' });
+    } else if (chainItem.startsWith('强化')) {
+      items.push({ time: '强化', title: '主线强化', detail: chainItem.replace('强化：', ''), tone: 'red' });
+    } else if (chainItem.startsWith('当前关键')) {
+      items.push({ time: '当前', title: '当前关键', detail: chainItem.replace('当前关键：', ''), tone: 'amber' });
+    } else if (chainItem.startsWith('后续验证')) {
+      items.push({ time: '后续', title: '后续验证', detail: chainItem.replace('后续验证：', ''), tone: 'emerald' });
+    }
+  });
+
+  verificationSignals
+    .slice()
+    .sort((left, right) => parseNewsTime(right.news.time) - parseNewsTime(left.news.time))
+    .slice(0, 2)
+    .forEach((signal) => {
+      items.push({
+        time: signal.news.time,
+        title: signal.label,
+        detail: signal.news.title,
+        tone: signal.tone === 'positive' ? 'red' : signal.tone === 'risk' ? 'emerald' : 'amber',
+      });
+    });
+
+  items.push({
+    time: '盘面',
+    title: '价格反馈',
+    detail: `当前涨跌幅 ${percentText(pctChange)}，需要继续看是否和主线同向强化。`,
+    tone: pctChange > 0 ? 'red' : pctChange < 0 ? 'emerald' : 'amber',
+  });
+
+  return items.slice(0, 6);
+}
+
 function getMainlineStrength(
   data: StockHighlightsResponse,
   highlights: HighlightItem[],
@@ -803,7 +870,7 @@ function HighlightDetailsDialog({
 }) {
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl border-slate-200 bg-white sm:max-w-2xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-2xl">
         {item && (
           <>
             <DialogHeader>
@@ -812,44 +879,44 @@ function HighlightDetailsDialog({
                 <Badge className={sideMeta[item.side].chip}>{sideMeta[item.side].label}</Badge>
                 <Badge variant="outline">Score {item.score}</Badge>
               </DialogTitle>
-              <DialogDescription>{item.category}</DialogDescription>
+              <DialogDescription className="text-slate-400">{item.category}</DialogDescription>
             </DialogHeader>
 
               <div className="space-y-5">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">核心判断</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">{item.thesis}</p>
+                <div className={`rounded-2xl border p-4 ${sideMeta[item.side].panel}`}>
+                  <div className="text-sm font-semibold text-white">核心判断</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-100">{item.thesis}</p>
                 </div>
 
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">为什么它现在重要</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">{item.importance}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">{item.interpretation}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.game_view}</p>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-sm font-semibold text-white">为什么它现在重要</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-200">{item.importance}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{item.interpretation}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{item.game_view}</p>
                 </div>
 
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">完整证据链</div>
+                <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+                  <div className="text-sm font-semibold text-white">完整证据链</div>
                   <div className="mt-3 space-y-3">
                     {item.evidenceChain.map((chainItem, index) => (
                       <div key={`${item.id}-detail-chain-${index}`} className="flex gap-3">
                         <div className="mt-1 h-2.5 w-2.5 rounded-full bg-cyan-500" />
-                        <div className="text-sm leading-6 text-slate-700">{chainItem}</div>
+                        <div className="text-sm leading-6 text-slate-100">{chainItem}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <div className="text-sm font-semibold text-slate-900">证据来源</div>
+                  <div className="text-sm font-semibold text-white">证据来源</div>
                   {item.evidence.map((evidence) => (
-                    <div key={`${item.id}-${evidence.url}`} className="rounded-2xl border p-4">
+                    <div key={`${item.id}-${evidence.url}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{evidence.source}</Badge>
                       <span className="text-xs text-slate-500">{evidence.published_at}</span>
                       {evidence.url ? (
                         <a
-                          className="inline-flex items-center gap-1 text-xs text-slate-500 underline"
+                          className="inline-flex items-center gap-1 text-xs text-cyan-300 underline"
                           href={evidence.url}
                           target="_blank"
                           rel="noreferrer"
@@ -858,7 +925,7 @@ function HighlightDetailsDialog({
                         </a>
                       ) : null}
                       </div>
-                      <div className="mt-2 text-sm font-semibold text-slate-900">{evidence.title}</div>
+                      <div className="mt-2 text-sm font-semibold text-white">{evidence.title}</div>
                     </div>
                   ))}
                 </div>
@@ -1071,10 +1138,10 @@ function ModelManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-slate-200 bg-white sm:max-w-4xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>模型工作台</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-slate-400">
             用于选择默认分析模型，或添加你自己的 OpenAI 兼容模型端点。
             如果是本地模型，请提供当前 Hugging Face Space 能访问到的地址，而不是你电脑的 localhost。
           </DialogDescription>
@@ -1082,7 +1149,7 @@ function ModelManagerDialog({
 
         <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
-            <div className="text-sm font-semibold text-slate-900">当前可用配置</div>
+            <div className="text-sm font-semibold text-white">当前可用配置</div>
             <div className="grid gap-3">
               {profiles.map((profile) => {
                 const active = profile.id === activeProfileId;
@@ -1091,22 +1158,22 @@ function ModelManagerDialog({
                   <div
                     key={profile.id}
                     className={`rounded-3xl border p-4 ${
-                      active ? 'border-cyan-400/60 bg-cyan-50' : 'border-slate-200 bg-white'
+                      active ? 'border-cyan-400/60 bg-cyan-500/10' : 'border-white/10 bg-white/[0.03]'
                     }`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-base font-semibold text-slate-900">{profile.label}</div>
+                          <div className="text-base font-semibold text-white">{profile.label}</div>
                           <Badge variant="outline">{profileKindLabel[profile.kind]}</Badge>
                           <Badge variant="outline">{profile.mode === 'server' ? '服务端' : '自定义端点'}</Badge>
                         </div>
-                        <div className="mt-2 text-sm text-slate-600">
+                        <div className="mt-2 text-sm text-slate-300">
                           {profile.vendor || 'server-auto'} / {profile.model || '按服务器优先级自动选择'}
                         </div>
-                        {profile.note ? <div className="mt-2 text-sm text-slate-500">{profile.note}</div> : null}
+                        {profile.note ? <div className="mt-2 text-sm text-slate-400">{profile.note}</div> : null}
                         {profile.baseUrl ? (
-                          <div className="mt-2 break-all text-xs text-slate-400">{profile.baseUrl}</div>
+                          <div className="mt-2 break-all text-xs text-slate-500">{profile.baseUrl}</div>
                         ) : null}
                       </div>
                       <div className="flex items-center gap-2">
@@ -1137,10 +1204,10 @@ function ModelManagerDialog({
           </div>
 
           <div className="space-y-4">
-            <div className="text-sm font-semibold text-slate-900">添加自定义模型</div>
-            <form className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-5" onSubmit={handleSubmit}>
+            <div className="text-sm font-semibold text-white">添加自定义模型</div>
+            <form className="space-y-4 rounded-3xl border border-white/10 bg-white/[0.03] p-5" onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">名称</label>
+                <label className="text-sm font-medium text-slate-300">名称</label>
                 <Input
                   placeholder="例如：本地 Qwen 32B"
                   value={form.label}
@@ -1149,9 +1216,9 @@ function ModelManagerDialog({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">类型</label>
+                <label className="text-sm font-medium text-slate-300">类型</label>
                 <select
-                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  className="flex h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
                   value={form.kind}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, kind: event.target.value as AnalysisProfile['kind'] }))
@@ -1164,7 +1231,7 @@ function ModelManagerDialog({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">模型名</label>
+                <label className="text-sm font-medium text-slate-300">模型名</label>
                 <Input
                   placeholder="例如：qwen-plus 或 Qwen/Qwen2.5-72B-Instruct"
                   value={form.model}
@@ -1173,7 +1240,7 @@ function ModelManagerDialog({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">兼容 OpenAI 的 API 地址</label>
+                <label className="text-sm font-medium text-slate-300">兼容 OpenAI 的 API 地址</label>
                 <Input
                   placeholder="例如：https://your-endpoint.example.com/v1/chat/completions"
                   value={form.baseUrl}
@@ -1182,7 +1249,7 @@ function ModelManagerDialog({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">API Key</label>
+                <label className="text-sm font-medium text-slate-300">API Key</label>
                 <Input
                   placeholder="可选；本地无鉴权端点可留空"
                   type="password"
@@ -1192,16 +1259,16 @@ function ModelManagerDialog({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">备注</label>
+                <label className="text-sm font-medium text-slate-300">备注</label>
                 <textarea
-                  className="min-h-[96px] w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  className="min-h-[96px] w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
                   placeholder="例如：适合情绪总结，速度慢但质量高。"
                   value={form.note}
                   onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
                 />
               </div>
 
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100">
                 本地模型说明：当前应用部署在 Hugging Face Space，服务端无法直接访问你电脑上的 localhost。
                 如果想用本地模型，请提供局域网、反向代理或其他可访问地址。
               </div>
@@ -1384,7 +1451,13 @@ export default function StockHighlightsPrototype() {
     () => linkNewsToFocus(data?.liveNews ?? [], focusHighlights),
     [data?.liveNews, focusHighlights],
   );
-  const verificationSignals = useMemo(() => getVerificationSignals(linkedFocusNews), [linkedFocusNews]);
+  const verificationSignals = useMemo(
+    () =>
+      getVerificationSignals(linkedFocusNews).sort(
+        (left, right) => parseNewsTime(right.news.time) - parseNewsTime(left.news.time),
+      ),
+    [linkedFocusNews],
+  );
   const mainlineStrength = useMemo(
     () => (data ? getMainlineStrength(data, sortedHighlights, verificationSignals, turningPointGroups) : null),
     [data, sortedHighlights, verificationSignals, turningPointGroups],
@@ -1392,6 +1465,10 @@ export default function StockHighlightsPrototype() {
   const emotionDrivers = useMemo(
     () => (data ? getEmotionDrivers(data, phaseInfo) : null),
     [data, phaseInfo],
+  );
+  const mainlineTimeline = useMemo(
+    () => getMainlineTimeline(mainlineHighlight, verificationSignals, data?.pctChange ?? 0),
+    [data?.pctChange, mainlineHighlight, verificationSignals],
   );
 
   const watched = useMemo(
@@ -1474,14 +1551,44 @@ export default function StockHighlightsPrototype() {
                   <div className="text-xl font-semibold tracking-tight text-white">AI 个股短线看点</div>
                 </div>
               </div>
-              <button
-                type="button"
-                aria-label="查看说明"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-white/20 hover:text-white"
-                onClick={() => setHelpOpen(true)}
-              >
-                <HelpCircle className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedStock ? (
+                  <button
+                    type="button"
+                    className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
+                      data?.analysisMode === 'ai'
+                        ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'
+                        : 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+                    }`}
+                    onClick={() => setAiInsightOpen(true)}
+                  >
+                    {data?.analysisMode === 'ai' ? (
+                      <>
+                        <Bot className="mr-1 h-3.5 w-3.5" />
+                        AI 研判
+                      </>
+                    ) : data?.analysisPending ? (
+                      <>
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        AI 生成中
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+                        规则回退
+                      </>
+                    )}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label="查看说明"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-white/20 hover:text-white"
+                  onClick={() => setHelpOpen(true)}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <Card className="rounded-[24px] border-white/10 bg-[rgba(6,8,22,0.92)] text-white shadow-none">
@@ -1720,29 +1827,13 @@ export default function StockHighlightsPrototype() {
                           </button>
                           <button
                             type="button"
-                            className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition hover:border-white/20 ${
-                              data.analysisMode === 'ai'
-                                ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'
-                                : 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-                            }`}
-                            onClick={() => setAiInsightOpen(true)}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition hover:border-white/20 ${emotionChipClass(
+                              phaseInfo?.tone,
+                            )}`}
+                            onClick={() => setEmotionOpen(true)}
                           >
-                            {data.analysisMode === 'ai' ? (
-                              <>
-                                <Bot className="mr-1 h-3.5 w-3.5" />
-                                AI 研判
-                              </>
-                            ) : data.analysisPending ? (
-                              <>
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                AI 生成中
-                              </>
-                            ) : (
-                              <>
-                                <ShieldAlert className="mr-1 h-3.5 w-3.5" />
-                                规则回退
-                              </>
-                            )}
+                            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-100/80">当前情绪</span>
+                            <span>{phaseInfo?.label || sentimentLabel(data.summary.sentiment)}</span>
                           </button>
                         </div>
                       </div>
@@ -1942,6 +2033,100 @@ export default function StockHighlightsPrototype() {
                     />
                   </div>
 
+                  {data.boardContext ? (
+                    <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                      <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                        <div className="flex items-center gap-3">
+                          <TrendingUp className="h-5 w-5 text-cyan-300" />
+                          <div>
+                            <div className="text-lg font-semibold">板块链条</div>
+                            <div className="text-sm text-slate-400">先看所属行业当前强弱，再判断这只票是在领涨、跟随还是掉队。</div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4 pt-6">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{data.boardContext.industry || '未识别行业'}</Badge>
+                          {data.boardContext.boardPct !== null && data.boardContext.boardPct !== undefined ? (
+                            <Badge className={priceBadgeClass(data.boardContext.boardPct)}>
+                              板块 {percentText(data.boardContext.boardPct)}
+                            </Badge>
+                          ) : null}
+                          <Badge className="border-cyan-400/20 bg-cyan-500/10 text-cyan-200">{data.boardContext.role}</Badge>
+                        </div>
+                        <div className="text-sm leading-6 text-slate-300">{data.boardContext.summary}</div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">板块热度</div>
+                            <div className="mt-2 text-sm leading-6 text-slate-200">
+                              {data.boardContext.boardRank
+                                ? `行业热度第 ${data.boardContext.boardRank} 位`
+                                : '暂无板块热度排序'}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">板块龙头</div>
+                            <div className="mt-2 text-sm leading-6 text-slate-200">
+                              {data.boardContext.leader
+                                ? `${data.boardContext.leader}${typeof data.boardContext.leaderPct === 'number' ? ` · ${percentText(data.boardContext.leaderPct)}` : ''}`
+                                : '暂无明确领涨股'}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
+                  {mainlineTimeline.length > 0 ? (
+                    <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                      <CardHeader className="space-y-3 border-b border-white/10 pb-5">
+                        <div className="flex items-center gap-3">
+                          <TrendingDown className="h-5 w-5 text-amber-300" />
+                          <div>
+                            <div className="text-lg font-semibold">主线演进</div>
+                            <div className="text-sm text-slate-400">把起点、强化、盘面反馈和待验证信号按时间顺序压成一条短线时间线。</div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3 pt-6">
+                        {mainlineTimeline.map((item, index) => (
+                          <div key={`${item.time}-${item.title}-${index}`} className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div
+                              className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                                item.tone === 'red'
+                                  ? 'bg-red-300'
+                                  : item.tone === 'emerald'
+                                    ? 'bg-emerald-300'
+                                    : item.tone === 'amber'
+                                      ? 'bg-amber-300'
+                                      : 'bg-cyan-300'
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                <span>{item.time}</span>
+                                <Badge
+                                  className={
+                                    item.tone === 'red'
+                                      ? 'border-red-400/20 bg-red-500/10 text-red-200'
+                                      : item.tone === 'emerald'
+                                        ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+                                        : item.tone === 'amber'
+                                          ? 'border-amber-400/20 bg-amber-500/10 text-amber-200'
+                                          : 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200'
+                                  }
+                                >
+                                  {item.title}
+                                </Badge>
+                              </div>
+                              <div className="mt-2 text-sm leading-6 text-slate-200">{item.detail}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
                   <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
                     <CardHeader className="space-y-3 border-b border-white/10 pb-5">
                       <div className="flex items-center gap-3">
@@ -1990,12 +2175,22 @@ export default function StockHighlightsPrototype() {
                                   >
                                     {signal.label}
                                   </Badge>
-                                  {signal.linkedLabel ? <Badge variant="outline">{signal.linkedLabel}</Badge> : null}
+                                  {signal.linkedLabel ? (
+                                    <Badge className="border-white/10 bg-white/[0.05] text-slate-200">{signal.linkedLabel}</Badge>
+                                  ) : null}
+                                  {signal.news.tag ? (
+                                    <Badge className="border-white/10 bg-white/[0.05] text-slate-300">{signal.news.tag}</Badge>
+                                  ) : null}
                                   <Badge variant="outline">{signal.news.source}</Badge>
                                   <span>{signal.news.time}</span>
                                 </div>
                                 <div className="mt-2 text-sm leading-6 text-slate-300">{signal.description}</div>
                                 <div className="mt-2 text-sm font-medium leading-6 text-white">{signal.news.title}</div>
+                                {signal.news.url ? (
+                                  <div className="mt-3 inline-flex items-center gap-1 text-xs text-cyan-300">
+                                    打开来源 <ExternalLink className="h-3.5 w-3.5" />
+                                  </div>
+                                ) : null}
                               </div>
                             </SignalContainer>
                           )})}
@@ -2034,14 +2229,14 @@ export default function StockHighlightsPrototype() {
       <TurningPointsDialog open={turningPointsOpen} onOpenChange={setTurningPointsOpen} groups={turningPointGroups} />
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="rounded-3xl border-slate-200 bg-white sm:max-w-xl">
+        <DialogContent className="rounded-3xl border-white/10 bg-slate-950 text-white sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>使用说明</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-slate-400">
               这个应用只服务短线观察，不追求做成大而全的资讯门户。
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 text-sm leading-7 text-slate-700">
+          <div className="space-y-3 text-sm leading-7 text-slate-300">
             <div>1. 先看主线和情绪，再看细节。</div>
             <div>2. 重点关注实时驱动、当前阶段和市场是否继续买单。</div>
             <div>3. AI 要给判断，不是复读资讯。</div>

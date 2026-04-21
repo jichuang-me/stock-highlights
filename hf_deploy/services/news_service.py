@@ -1,60 +1,59 @@
-import datetime as dt
 import logging
 import time
+from datetime import datetime
 from typing import Any, Dict, List
 
 try:
-    from ..core.config import HTTP_SESSION, REQUEST_TIMEOUT, USER_AGENT
-except ImportError:
-    from core.config import HTTP_SESSION, REQUEST_TIMEOUT, USER_AGENT
+    import akshare as ak
+except ImportError:  # pragma: no cover - optional at runtime
+    ak = None
 
 
 NEWS_CACHE_TTL = 120
 _news_cache: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
 
 
-def _format_timestamp(value: Any) -> str:
-    if not value:
-        return "未知时间"
-    try:
-        return dt.datetime.fromtimestamp(int(value)).strftime("%m-%d %H:%M")
-    except (TypeError, ValueError, OSError):
-        return str(value)
+def _normalize_news_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "title": str(item.get("新闻标题") or "").strip(),
+        "time": str(item.get("发布时间") or "").strip() or "最新",
+        "url": str(item.get("新闻链接") or "").strip(),
+        "source": str(item.get("文章来源") or "").strip() or "东方财富",
+        "tag": "外部资讯",
+    }
 
 
-def fetch_cls_telegraph(code: str) -> List[Dict[str, Any]]:
+def _sort_key(item: Dict[str, Any]) -> float:
+    value = str(item.get("time") or "").strip()
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, pattern).timestamp()
+        except ValueError:
+            continue
+    return 0.0
+
+
+def fetch_stock_news(code: str) -> List[Dict[str, Any]]:
     cached = _news_cache.get(code)
     now = time.time()
     if cached and now - cached[0] < NEWS_CACHE_TTL:
         return cached[1]
 
-    url = "https://www.cls.cn/api/sw"
-    params = {"type": "telegram", "keyword": code, "page": 1, "os": "web"}
+    if ak is None:
+        return []
+
     try:
-        resp = HTTP_SESSION.get(
-            url,
-            params=params,
-            headers={"User-Agent": USER_AGENT},
-            timeout=REQUEST_TIMEOUT,
-        )
-        items = resp.json().get("data", {}).get("telegram", {}).get("items", [])
-        result = [
-            {
-                "title": item.get("title") or (item.get("content") or "")[:60],
-                "time": _format_timestamp(item.get("ctime")),
-                "url": f"https://www.cls.cn/detail/{item.get('id')}",
-                "source": "财联社电报",
-                "tag": "快讯",
-            }
-            for item in items[:10]
-            if item.get("id")
-        ]
+        news_df = ak.stock_news_em(symbol=code)
+        records = news_df.to_dict(orient="records")
+        result = [_normalize_news_item(item) for item in records[:20] if item.get("新闻标题")]
+        result.sort(key=_sort_key, reverse=True)
+        result = result[:12]
         _news_cache[code] = (now, result)
         return result
     except Exception as exc:
-        logging.error("CLS telegraph fetch failed for %s: %s", code, exc)
+        logging.error("Eastmoney stock news fetch failed for %s: %s", code, exc)
         return []
 
 
 def get_integrated_news(code: str) -> List[Dict[str, Any]]:
-    return fetch_cls_telegraph(code)
+    return fetch_stock_news(code)

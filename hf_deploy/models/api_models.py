@@ -55,6 +55,17 @@ class NewsItem(BaseModel):
     tag: Optional[str] = None
 
 
+class BoardContext(BaseModel):
+    industry: str
+    boardName: Optional[str] = None
+    boardPct: Optional[float] = None
+    boardRank: Optional[int] = None
+    leader: Optional[str] = None
+    leaderPct: Optional[float] = None
+    role: str
+    summary: str
+
+
 class RadarPoint(BaseModel):
     k: str
     v: float = Field(ge=0, le=100)
@@ -77,4 +88,5 @@ class HighlightsResponse(BaseModel):
     pctChange: float
     highlights: List[HighlightItem] = Field(default_factory=list)
     liveNews: List[NewsItem] = Field(default_factory=list)
+    boardContext: Optional[BoardContext] = None
     radar: List[RadarPoint] = Field(default_factory=list)

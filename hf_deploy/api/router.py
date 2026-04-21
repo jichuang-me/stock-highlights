@@ -5,19 +5,19 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Path, Query, Request
 
 try:
-    from ..models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
+    from ..models.api_models import BoardContext, HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
     from ..services.ai_analyst import get_cached_ai_summary, invalidate_ai_summary_cache, queue_ai_summary
     from ..services.announcement_service import fetch_announcements
     from ..services.highlight_engine import analyze_highlights
-    from ..services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
+    from ..services.market_service import fetch_board_context, fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
     from ..services.news_service import get_integrated_news
     from ..services.search_service import get_stock_profile, search_stock_enhanced
 except ImportError:
-    from models.api_models import HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
+    from models.api_models import BoardContext, HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
     from services.ai_analyst import get_cached_ai_summary, invalidate_ai_summary_cache, queue_ai_summary
     from services.announcement_service import fetch_announcements
     from services.highlight_engine import analyze_highlights
-    from services.market_service import fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
+    from services.market_service import fetch_board_context, fetch_eastmoney_indicators, fetch_sina_prices, fetch_xueqiu_hotness
     from services.news_service import get_integrated_news
     from services.search_service import get_stock_profile, search_stock_enhanced
 
@@ -61,7 +61,7 @@ def _extract_ai_profile(request: Request) -> Optional[Dict[str, str]]:
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "version": "v4.12.0"}
+    return {"status": "ok", "version": "v4.13.0"}
 
 
 @router.get("/stocks/search", response_model=List[SearchStock])
@@ -149,6 +149,13 @@ async def _build_highlights_response(
     stock_price = all_prices.get(code, {"price": 0.0, "pct": 0.0})
     highlights = analyze_highlights(raw_ann)
     news = news or _build_news_fallback(highlights, stock_price)
+    board_context = await asyncio.to_thread(
+        fetch_board_context,
+        code,
+        profile_info["name"],
+        float(stock_price["pct"]),
+        profile_info.get("industry") or "",
+    )
 
     company_name = raw_ann[0].get("secName") if raw_ann else profile_info["name"]
     industry = profile_info["industry"] or None
@@ -240,6 +247,7 @@ async def _build_highlights_response(
         pctChange=float(stock_price["pct"]),
         highlights=highlights,
         liveNews=news,
+        boardContext=BoardContext(**board_context),
         radar=radar,
     )
 
