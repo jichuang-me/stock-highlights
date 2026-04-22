@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Bot,
   ChevronDown,
+  ExternalLink,
   Flame,
   Heart,
   HelpCircle,
