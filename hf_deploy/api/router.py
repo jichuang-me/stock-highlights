@@ -1,11 +1,23 @@
 import asyncio
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Path, Query, Request
 
 try:
-    from ..models.api_models import BoardContext, HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
+    from ..models.api_models import (
+        AnalystConsensus,
+        BoardContext,
+        FutureOutlook,
+        HighlightsResponse,
+        RadarPoint,
+        SearchStock,
+        ShortTermOutlook,
+        StockInfo,
+        StockSummary,
+        ValuationOutlook,
+        ValuationSnapshot,
+    )
     from ..services.ai_analyst import get_cached_ai_summary, invalidate_ai_summary_cache, queue_ai_summary
     from ..services.announcement_service import fetch_announcements
     from ..services.highlight_engine import analyze_highlights
@@ -13,7 +25,19 @@ try:
     from ..services.news_service import get_integrated_news
     from ..services.search_service import get_stock_profile, search_stock_enhanced
 except ImportError:
-    from models.api_models import BoardContext, HighlightsResponse, RadarPoint, SearchStock, StockInfo, StockSummary
+    from models.api_models import (
+        AnalystConsensus,
+        BoardContext,
+        FutureOutlook,
+        HighlightsResponse,
+        RadarPoint,
+        SearchStock,
+        ShortTermOutlook,
+        StockInfo,
+        StockSummary,
+        ValuationOutlook,
+        ValuationSnapshot,
+    )
     from services.ai_analyst import get_cached_ai_summary, invalidate_ai_summary_cache, queue_ai_summary
     from services.announcement_service import fetch_announcements
     from services.highlight_engine import analyze_highlights
@@ -122,6 +146,124 @@ def _build_news_fallback(highlights: List[dict], stock_price: dict) -> List[dict
     return items
 
 
+def _metric_text(value: object, suffix: str = "") -> str:
+    text = str(value or "").strip()
+    if not text or text in {"-", "--", "None"}:
+        return "[数据暂不可用]"
+    return f"{text}{suffix}"
+
+
+def _consensus_stance(sentiment: str) -> str:
+    if sentiment == "positive":
+        return "看好"
+    if sentiment == "negative":
+        return "看空"
+    return "中性"
+
+
+def _build_consensus(summary_sentiment: str, market_impression: str, board_context: Optional[Dict[str, Any]]) -> AnalystConsensus:
+    stance = _consensus_stance(summary_sentiment)
+    board_note = ""
+    if board_context and board_context.get("roleReason"):
+        board_note = f" {board_context['roleReason']}"
+    rationale = f"{market_impression}{board_note}".strip()[:220] or "[数据暂不可用]"
+    return AnalystConsensus(stance=stance, rationale=rationale)
+
+
+def _build_short_term_outlook(highlights: List[dict], news: List[dict]) -> ShortTermOutlook:
+    catalysts: List[str] = []
+
+    for item in highlights:
+        if item.get("side") == "positive":
+            reason = str(item.get("importance") or item.get("why") or "").strip()
+            if reason:
+                catalysts.append(reason[:80])
+        if len(catalysts) >= 3:
+            break
+
+    if len(catalysts) < 3:
+        for item in news[:5]:
+            title = str(item.get("title") or "").strip()
+            if title:
+                catalysts.append(title[:80])
+            if len(catalysts) >= 3:
+                break
+
+    deduped: List[str] = []
+    seen = set()
+    for item in catalysts:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+
+    positive_labels = [str(item.get("label") or "").strip() for item in highlights if item.get("side") == "positive"]
+    risk_labels = [str(item.get("label") or "").strip() for item in highlights if item.get("side") == "risk"]
+
+    if positive_labels:
+        earnings_expectation = f"未来1-3个月更值得跟踪 {positive_labels[0]} 的兑现强度，若持续获得订单、业绩或价格验证，短期预期有望继续改善。"
+    elif risk_labels:
+        earnings_expectation = f"未来1-3个月更需要防守 {risk_labels[0]} 的继续发酵，若负面扰动扩散，短期预期可能进一步走弱。"
+    else:
+        earnings_expectation = "[数据暂不可用]"
+
+    return ShortTermOutlook(
+        catalysts=deduped[:3] or ["[数据暂不可用]"],
+        earningsExpectation=earnings_expectation,
+    )
+
+
+def _build_valuation_outlook(indicators: dict, highlights: List[dict], board_context: Optional[Dict[str, Any]]) -> ValuationOutlook:
+    pe = _metric_text(indicators.get("pe"), "x")
+    pb = _metric_text(indicators.get("pb"), "x")
+    roe = _metric_text(indicators.get("roe"), "%")
+    current_level = f"当前估值：PE {pe}，PB {pb}，ROE {roe}。"
+
+    target_range = "[数据暂不可用]"
+
+    upside_drivers: List[str] = []
+    downside_risks: List[str] = []
+
+    for item in highlights:
+        label = str(item.get("label") or "").strip()
+        importance = str(item.get("importance") or "").strip()
+        text = importance or label
+        if item.get("side") == "positive" and len(upside_drivers) < 3 and text:
+            upside_drivers.append(text[:88])
+        if item.get("side") == "risk" and len(downside_risks) < 3 and text:
+            downside_risks.append(text[:88])
+
+    if board_context and board_context.get("summary") and len(upside_drivers) < 3:
+        upside_drivers.append(str(board_context.get("summary"))[:88])
+
+    if not upside_drivers:
+        upside_drivers = ["[数据暂不可用]"]
+    if not downside_risks:
+        downside_risks = ["[数据暂不可用]"]
+
+    return ValuationOutlook(
+        currentLevel=current_level,
+        targetRange=target_range,
+        upsideDrivers=upside_drivers,
+        downsideRisks=downside_risks,
+    )
+
+
+def _build_future_outlook(
+    sentiment: str,
+    market_impression: str,
+    indicators: dict,
+    highlights: List[dict],
+    news: List[dict],
+    board_context: Optional[Dict[str, Any]],
+) -> FutureOutlook:
+    return FutureOutlook(
+        analystConsensus=_build_consensus(sentiment, market_impression, board_context),
+        shortTermOutlook=_build_short_term_outlook(highlights, news),
+        valuationOutlook=_build_valuation_outlook(indicators, highlights, board_context),
+    )
+
+
 async def _build_highlights_response(
     code: str,
     request: Request,
@@ -218,6 +360,20 @@ async def _build_highlights_response(
             profile,
         )
 
+    valuation_snapshot = ValuationSnapshot(
+        pe=_metric_text(indicators.get("pe")),
+        pb=_metric_text(indicators.get("pb")),
+        roe=_metric_text(indicators.get("roe")),
+    )
+    future_outlook = _build_future_outlook(
+        sentiment,
+        market_impression,
+        indicators,
+        highlights,
+        news,
+        board_context,
+    )
+
     radar = [
         RadarPoint(k="人气热度", v=_clamp(float(hotness["popularity"]))),
         RadarPoint(k="盘中波动", v=_clamp(abs(float(stock_price["pct"])) * 10)),
@@ -245,6 +401,8 @@ async def _build_highlights_response(
         aiTurningPoint=ai_turning_point,
         price=float(stock_price["price"]),
         pctChange=float(stock_price["pct"]),
+        valuationSnapshot=valuation_snapshot,
+        futureOutlook=future_outlook,
         highlights=highlights,
         liveNews=news,
         boardContext=BoardContext(**board_context),

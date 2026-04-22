@@ -908,6 +908,24 @@ function InlineSourceMarker({
   );
 }
 
+function impactLevel(score: number) {
+  if (score >= 80) return '高';
+  if (score >= 60) return '中';
+  return '低';
+}
+
+function impactBadgeClass(side: 'positive' | 'risk', level: '高' | '中' | '低') {
+  if (side === 'positive') {
+    if (level === '高') return 'border-red-400/20 bg-red-500/12 text-red-200';
+    if (level === '中') return 'border-red-400/15 bg-red-500/8 text-red-100';
+    return 'border-red-400/10 bg-red-500/5 text-red-100';
+  }
+
+  if (level === '高') return 'border-emerald-400/20 bg-emerald-500/12 text-emerald-200';
+  if (level === '中') return 'border-emerald-400/15 bg-emerald-500/8 text-emerald-100';
+  return 'border-emerald-400/10 bg-emerald-500/5 text-emerald-100';
+}
+
 function getRadarValue(data: StockHighlightsResponse | null, label: string) {
   return data?.radar.find((point) => point.k === label)?.v ?? 0;
 }
@@ -1445,6 +1463,345 @@ function ModelManagerDialog({
   );
 }
 
+function StockIdeaCardLayout({
+  data,
+  displayStock,
+  watched,
+  toggleWatchlist,
+  setAiInsightOpen,
+  setEmotionOpen,
+  setActiveHighlight,
+  positiveHighlights,
+  riskHighlights,
+  linkedBoardStocks,
+  supplementalNews,
+  phaseInfo,
+  stageInfo,
+}: {
+  data: StockHighlightsResponse;
+  displayStock: SearchStock;
+  watched: boolean;
+  toggleWatchlist: () => void;
+  setAiInsightOpen: (open: boolean) => void;
+  setEmotionOpen: (open: boolean) => void;
+  setActiveHighlight: (item: HighlightItem | null) => void;
+  positiveHighlights: HighlightItem[];
+  riskHighlights: HighlightItem[];
+  linkedBoardStocks: Array<{ code: string; name: string; pct?: number | null; role: string; reason: string }>;
+  supplementalNews: Array<{ label: string; tone: 'positive' | 'risk' | 'watch'; description: string; news: { title: string; url: string; time: string } }>;
+  phaseInfo: ReturnType<typeof getShortlinePhase> | null;
+  stageInfo: ReturnType<typeof getSentimentStage> | null;
+}) {
+  return (
+    <div className="space-y-6">
+      <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
+        <CardContent className="space-y-5 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-3xl font-semibold">{displayStock.name}</h2>
+                <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 ${priceBadgeClass(data.pctChange)}`}>
+                  <span className="text-2xl font-semibold">{data.price.toFixed(2)}</span>
+                  <span className="text-lg font-semibold">{percentText(data.pctChange)}</span>
+                </div>
+                <button
+                  type="button"
+                  aria-label={watched ? '移出自选' : '加入自选'}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-white/20 hover:text-white"
+                  onClick={toggleWatchlist}
+                >
+                  <Star className={`h-4 w-4 ${watched ? 'fill-current text-amber-300' : ''}`} />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                <span>
+                  {displayStock.code} · {displayStock.industry || '行业待识别'}
+                </span>
+                <Badge className={readableBadgeClass('default')}>{data.analysisMode === 'ai' ? 'AI 分析' : '规则分析'}</Badge>
+                <Badge className={emotionChipClass(phaseInfo?.tone)}>{data.futureOutlook.analystConsensus.stance}</Badge>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full border-white/10 bg-slate-950/60 px-3 text-slate-200 hover:bg-slate-900"
+              onClick={() => setAiInsightOpen(true)}
+            >
+              <Bot className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+            <section className="space-y-6">
+              <Card className="rounded-[28px] border-cyan-400/20 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(8,47,73,0.08))] text-white shadow-none">
+                <CardHeader className="pb-3">
+                  <div className="text-xl font-semibold">市场印象</div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-2xl font-semibold leading-tight text-white">
+                    {data.headline || '个股投资要点分析卡片'}
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
+                    <div className="text-sm font-semibold text-cyan-200">整体认知与定位</div>
+                    <p className="mt-2 text-sm leading-7 text-slate-100">{data.marketImpression}</p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
+                      <div className="text-sm font-semibold text-slate-100">投资者关注度与市场地位</div>
+                      <p className="mt-2 text-sm leading-7 text-slate-300">
+                        {data.boardContext?.summary || '当前市场主要围绕公司自身公告和核心经营线索定价。'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEmotionOpen(true)}
+                      className={`rounded-2xl border p-4 text-left transition hover:border-white/20 ${emotionChipClass(phaseInfo?.tone)}`}
+                    >
+                      <div className="text-sm font-semibold text-white">当前情绪</div>
+                      <div className="mt-2 text-sm leading-7 text-slate-200">
+                        {stageInfo?.title || data.futureOutlook.analystConsensus.stance} · {stageInfo?.description || '等待更多价格和消息确认。'}
+                      </div>
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <Card className="rounded-[28px] border-red-400/15 bg-red-500/[0.05] text-white shadow-none">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xl font-semibold">亮点</div>
+                      <Badge className={readableBadgeClass('red')}>{positiveHighlights.length}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {positiveHighlights.length > 0 ? (
+                      positiveHighlights.map((item, index) => {
+                        const evidence = getPrimaryEvidence(item);
+                        const level = impactLevel(item.score);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setActiveHighlight(item)}
+                            className="w-full rounded-2xl border border-red-400/15 bg-slate-950/50 p-4 text-left transition hover:border-red-300/25 hover:bg-slate-900"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-white">
+                                {index + 1}. {item.label}
+                              </span>
+                              <Badge className={impactBadgeClass('positive', level)}>{level}</Badge>
+                            </div>
+                            <div className="mt-3 text-sm leading-7 text-slate-100">{item.thesis}</div>
+                            <div className="mt-2 text-sm leading-7 text-slate-300">
+                              判断依据：{item.importance}
+                              <InlineSourceMarker title={evidence?.title} url={evidence?.url} />
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">[数据暂不可用]</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-[28px] border-emerald-400/15 bg-emerald-500/[0.05] text-white shadow-none">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xl font-semibold">风险</div>
+                      <Badge className={readableBadgeClass('emerald')}>{riskHighlights.length}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {riskHighlights.length > 0 ? (
+                      riskHighlights.map((item, index) => {
+                        const evidence = getPrimaryEvidence(item);
+                        const level = impactLevel(item.score);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setActiveHighlight(item)}
+                            className="w-full rounded-2xl border border-emerald-400/15 bg-slate-950/50 p-4 text-left transition hover:border-emerald-300/25 hover:bg-slate-900"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-white">
+                                {index + 1}. {item.label}
+                              </span>
+                              <Badge className={impactBadgeClass('risk', level)}>{level}</Badge>
+                            </div>
+                            <div className="mt-3 text-sm leading-7 text-slate-100">{item.thesis}</div>
+                            <div className="mt-2 text-sm leading-7 text-slate-300">
+                              风险分析依据：{item.importance}
+                              <InlineSourceMarker title={evidence?.title} url={evidence?.url} />
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">[数据暂不可用]</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="rounded-[28px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                <CardHeader className="pb-3">
+                  <div className="text-xl font-semibold">未来预期</div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="text-sm font-semibold text-white">分析师共识</div>
+                      <Badge
+                        className={readableBadgeClass(
+                          data.futureOutlook.analystConsensus.stance === '看好'
+                            ? 'red'
+                            : data.futureOutlook.analystConsensus.stance === '看空'
+                              ? 'emerald'
+                              : 'default',
+                        )}
+                      >
+                        {data.futureOutlook.analystConsensus.stance}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 text-sm leading-7 text-slate-300">{data.futureOutlook.analystConsensus.rationale}</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="text-sm font-semibold text-white">短期预期（1-3个月）</div>
+                    <div className="mt-3 text-sm font-medium text-slate-200">主要催化剂</div>
+                    <div className="mt-2 space-y-2">
+                      {data.futureOutlook.shortTermOutlook.catalysts.map((item, index) => (
+                        <div key={`${item}-${index}`} className="flex gap-3 text-sm text-slate-300">
+                          <div className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                          <div className="leading-7">{item}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 text-sm font-medium text-slate-200">业绩预期</div>
+                    <div className="mt-2 text-sm leading-7 text-slate-300">{data.futureOutlook.shortTermOutlook.earningsExpectation}</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="text-sm font-semibold text-white">估值变化预期</div>
+                    <div className="mt-2 text-sm leading-7 text-slate-300">{data.futureOutlook.valuationOutlook.currentLevel}</div>
+                    <div className="mt-2 text-sm leading-7 text-slate-300">
+                      目标估值区间：{data.futureOutlook.valuationOutlook.targetRange}
+                    </div>
+                    <div className="mt-3 grid gap-4 md:grid-cols-2">
+                      <div>
+                        <div className="text-sm font-medium text-red-200">上行驱动</div>
+                        <div className="mt-2 space-y-2">
+                          {data.futureOutlook.valuationOutlook.upsideDrivers.map((item, index) => (
+                            <div key={`${item}-${index}`} className="flex gap-3 text-sm text-slate-300">
+                              <div className="mt-2 h-1.5 w-1.5 rounded-full bg-red-300" />
+                              <div className="leading-7">{item}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-emerald-200">下行风险</div>
+                        <div className="mt-2 space-y-2">
+                          {data.futureOutlook.valuationOutlook.downsideRisks.map((item, index) => (
+                            <div key={`${item}-${index}`} className="flex gap-3 text-sm text-slate-300">
+                              <div className="mt-2 h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                              <div className="leading-7">{item}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+
+            <aside className="space-y-6">
+              <Card className="rounded-[28px] border-white/10 bg-white/[0.03] text-white shadow-none">
+                <CardHeader className="pb-3">
+                  <div className="text-lg font-semibold">补充跟踪</div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {data.boardContext ? (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={readableBadgeClass(data.boardContext.industry ? 'cyan' : 'amber')}>
+                          {data.boardContext.industry || '行业待识别'}
+                        </Badge>
+                        <Badge className={boardRoleChipClass(data.boardContext.role)}>{data.boardContext.role}</Badge>
+                        {typeof data.boardContext.boardPct === 'number' ? (
+                          <Badge className={priceBadgeClass(data.boardContext.boardPct)}>{percentText(data.boardContext.boardPct)}</Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 text-sm leading-7 text-slate-300">
+                        {data.boardContext.roleReason || data.boardContext.summary}
+                      </div>
+                      {linkedBoardStocks.length > 0 ? (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-sm font-medium text-slate-200">同板块联动票</div>
+                          {linkedBoardStocks.map((stock) => (
+                            <div key={`${stock.code}-${stock.name}`} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                              <div>
+                                <div className="text-sm font-medium text-white">
+                                  {stock.name} {stock.code ? <span className="text-xs text-slate-500">{stock.code}</span> : null}
+                                </div>
+                                <div className="mt-1 text-xs leading-5 text-slate-400">{stock.reason}</div>
+                              </div>
+                              {typeof stock.pct === 'number' ? (
+                                <div className={`text-sm font-semibold ${priceTextClass(stock.pct)}`}>{percentText(stock.pct)}</div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                    <div className="text-sm font-semibold text-white">补充验证</div>
+                    <div className="mt-3 space-y-3">
+                      {supplementalNews.length > 0 ? (
+                        supplementalNews.map((signal, index) => (
+                          <div key={`${signal.label}-${signal.news.url}-${index}`} className={index > 0 ? 'border-t border-white/10 pt-3' : ''}>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                              <Badge
+                                className={
+                                  signal.tone === 'positive'
+                                    ? readableBadgeClass('red')
+                                    : signal.tone === 'risk'
+                                      ? readableBadgeClass('emerald')
+                                      : readableBadgeClass('default')
+                                }
+                              >
+                                {signal.label}
+                              </Badge>
+                              <span>{signal.news.time}</span>
+                            </div>
+                            <div className="mt-2 text-sm leading-7 text-slate-300">
+                              {signal.description}
+                              <InlineSourceMarker title={signal.news.title} url={signal.news.url} />
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-slate-400">[数据暂不可用]</div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </aside>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function StockHighlightsPrototype() {
   const [query, setQuery] = useState('');
   const [selectedStock, setSelectedStock] = useState<SearchStock | null>(null);
@@ -1633,6 +1990,16 @@ export default function StockHighlightsPrototype() {
     () => getMainlineTimeline(mainlineHighlight, verificationSignals, data?.pctChange ?? 0),
     [data?.pctChange, mainlineHighlight, verificationSignals],
   );
+  const positiveHighlights = useMemo(
+    () => sortedHighlights.filter((item) => item.side === 'positive').slice(0, 5),
+    [sortedHighlights],
+  );
+  const riskHighlights = useMemo(
+    () => sortedHighlights.filter((item) => item.side === 'risk').slice(0, 5),
+    [sortedHighlights],
+  );
+  const supplementalNews = useMemo(() => verificationSignals.slice(0, 3), [verificationSignals]);
+  const linkedBoardStocks = useMemo(() => data?.boardContext?.linkedStocks.slice(0, 4) ?? [], [data?.boardContext?.linkedStocks]);
 
   const watched = useMemo(
     () => !!selectedStockForList && watchlist.some((item) => item.code === selectedStockForList.code),
@@ -1889,6 +2256,23 @@ export default function StockHighlightsPrototype() {
             ) : null}
 
             {data && displayStock && !loading ? (
+              <>
+                <StockIdeaCardLayout
+                  data={data}
+                  displayStock={displayStock}
+                  watched={watched}
+                  toggleWatchlist={toggleWatchlist}
+                  setAiInsightOpen={setAiInsightOpen}
+                  setEmotionOpen={setEmotionOpen}
+                  setActiveHighlight={setActiveHighlight}
+                  positiveHighlights={positiveHighlights}
+                  riskHighlights={riskHighlights}
+                  linkedBoardStocks={linkedBoardStocks}
+                  supplementalNews={supplementalNews}
+                  phaseInfo={phaseInfo}
+                  stageInfo={stageInfo}
+                />
+                {false ? (
               <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
                 <section className="space-y-6">
                   <div className="space-y-4 text-white">
@@ -2362,6 +2746,8 @@ export default function StockHighlightsPrototype() {
                   </Card>
                 </section>
               </div>
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : null}

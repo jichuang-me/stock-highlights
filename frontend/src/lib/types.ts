@@ -72,6 +72,35 @@ export type BoardContext = {
   linkedStocks: BoardLinkedStock[];
 };
 
+export type ValuationSnapshot = {
+  pe: string;
+  pb: string;
+  roe: string;
+};
+
+export type AnalystConsensus = {
+  stance: '看好' | '中性' | '看空';
+  rationale: string;
+};
+
+export type ShortTermOutlook = {
+  catalysts: string[];
+  earningsExpectation: string;
+};
+
+export type ValuationOutlook = {
+  currentLevel: string;
+  targetRange: string;
+  upsideDrivers: string[];
+  downsideRisks: string[];
+};
+
+export type FutureOutlook = {
+  analystConsensus: AnalystConsensus;
+  shortTermOutlook: ShortTermOutlook;
+  valuationOutlook: ValuationOutlook;
+};
+
 export type RadarPoint = {
   k: string;
   v: number;
@@ -92,6 +121,8 @@ export type StockHighlightsResponse = {
   aiTurningPoint?: string | null;
   price: number;
   pctChange: number;
+  valuationSnapshot: ValuationSnapshot;
+  futureOutlook: FutureOutlook;
   highlights: HighlightItem[];
   liveNews: NewsItem[];
   boardContext?: BoardContext | null;

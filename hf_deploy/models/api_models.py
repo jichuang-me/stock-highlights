@@ -79,6 +79,35 @@ class BoardContext(BaseModel):
     linkedStocks: List[BoardLinkedStock] = Field(default_factory=list)
 
 
+class ValuationSnapshot(BaseModel):
+    pe: str
+    pb: str
+    roe: str
+
+
+class AnalystConsensus(BaseModel):
+    stance: Literal["看好", "中性", "看空"]
+    rationale: str
+
+
+class ShortTermOutlook(BaseModel):
+    catalysts: List[str] = Field(default_factory=list)
+    earningsExpectation: str
+
+
+class ValuationOutlook(BaseModel):
+    currentLevel: str
+    targetRange: str
+    upsideDrivers: List[str] = Field(default_factory=list)
+    downsideRisks: List[str] = Field(default_factory=list)
+
+
+class FutureOutlook(BaseModel):
+    analystConsensus: AnalystConsensus
+    shortTermOutlook: ShortTermOutlook
+    valuationOutlook: ValuationOutlook
+
+
 class RadarPoint(BaseModel):
     k: str
     v: float = Field(ge=0, le=100)
@@ -99,6 +128,8 @@ class HighlightsResponse(BaseModel):
     aiTurningPoint: Optional[str] = None
     price: float
     pctChange: float
+    valuationSnapshot: ValuationSnapshot
+    futureOutlook: FutureOutlook
     highlights: List[HighlightItem] = Field(default_factory=list)
     liveNews: List[NewsItem] = Field(default_factory=list)
     boardContext: Optional[BoardContext] = None
