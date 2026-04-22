@@ -877,16 +877,25 @@ function InlineSourceMarker({
   title,
   url,
   index = 1,
+  tone = 'neutral',
   className = '',
 }: {
   title?: string | null;
   url?: string | null;
   index?: number;
+  tone?: 'positive' | 'risk' | 'neutral';
   className?: string;
 }) {
   if (!title && !url) {
     return null;
   }
+
+  const toneClass =
+    tone === 'positive'
+      ? 'text-red-300 hover:text-red-200'
+      : tone === 'risk'
+        ? 'text-cyan-200 hover:text-cyan-100'
+        : 'text-slate-300 hover:text-white';
 
   return (
     <sup className={`ml-1 align-super text-[10px] font-semibold leading-none ${className}`.trim()}>
@@ -897,7 +906,7 @@ function InlineSourceMarker({
           rel="noreferrer"
           title={title || '打开来源'}
           aria-label={title ? `打开来源：${title}` : '打开来源'}
-          className="text-cyan-200 underline-offset-2 transition hover:text-cyan-100 hover:underline"
+          className={`${toneClass} underline-offset-2 transition hover:underline`}
         >
           [{index}]
         </a>
@@ -905,6 +914,39 @@ function InlineSourceMarker({
         <span className="text-slate-400">[{index}]</span>
       )}
     </sup>
+  );
+}
+
+function InlineSourceMarkers({
+  sources,
+  tone = 'neutral',
+  maxItems = 3,
+}: {
+  sources?: Array<{ title?: string | null; url?: string | null }> | null;
+  tone?: 'positive' | 'risk' | 'neutral';
+  maxItems?: number;
+}) {
+  const deduped = (sources || []).filter((item, index, array) => {
+    const key = `${item.title || ''}::${item.url || ''}`;
+    return key !== '::' && array.findIndex((candidate) => `${candidate.title || ''}::${candidate.url || ''}` === key) === index;
+  });
+
+  if (deduped.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {deduped.slice(0, maxItems).map((source, index) => (
+        <InlineSourceMarker
+          key={`${source.title || ''}-${source.url || ''}-${index}`}
+          title={source.title}
+          url={source.url}
+          index={index + 1}
+          tone={tone}
+        />
+      ))}
+    </>
   );
 }
 
@@ -928,6 +970,18 @@ function impactBadgeClass(side: 'positive' | 'risk', level: '高' | '中' | '低
 
 function getRadarValue(data: StockHighlightsResponse | null, label: string) {
   return data?.radar.find((point) => point.k === label)?.v ?? 0;
+}
+
+function normalizeConceptName(value: string) {
+  return value.replace(/[：:]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildConceptSearchUrl(keyword: string) {
+  return `https://so.eastmoney.com/web/s?keyword=${encodeURIComponent(`${keyword} 概念股`)}`;
+}
+
+function buildStockSearchUrl(keyword: string) {
+  return `https://so.eastmoney.com/web/s?keyword=${encodeURIComponent(`${keyword} 联动个股`)}`;
 }
 
 function getEmotionDrivers(data: StockHighlightsResponse, phaseInfo: ReturnType<typeof getShortlinePhase>) {
@@ -1468,12 +1522,11 @@ function StockIdeaCardLayout({
   displayStock,
   watched,
   toggleWatchlist,
-  setAiInsightOpen,
   setEmotionOpen,
   setActiveHighlight,
   positiveHighlights,
   riskHighlights,
-  linkedBoardStocks,
+  coreConcepts,
   supplementalNews,
   phaseInfo,
   stageInfo,
@@ -1482,21 +1535,22 @@ function StockIdeaCardLayout({
   displayStock: SearchStock;
   watched: boolean;
   toggleWatchlist: () => void;
-  setAiInsightOpen: (open: boolean) => void;
   setEmotionOpen: (open: boolean) => void;
   setActiveHighlight: (item: HighlightItem | null) => void;
   positiveHighlights: HighlightItem[];
   riskHighlights: HighlightItem[];
-  linkedBoardStocks: Array<{ code: string; name: string; pct?: number | null; role: string; reason: string }>;
+  coreConcepts: Array<{ name: string; tone: 'positive' | 'risk'; reason: string }>;
   supplementalNews: Array<{ label: string; tone: 'positive' | 'risk' | 'watch'; description: string; news: { title: string; url: string; time: string } }>;
   phaseInfo: ReturnType<typeof getShortlinePhase> | null;
   stageInfo: ReturnType<typeof getSentimentStage> | null;
 }) {
+  const marketSources = positiveHighlights.flatMap((item) => item.evidence).slice(0, 2);
+
   return (
     <div className="space-y-6">
       <Card className="rounded-[30px] border-white/10 bg-white/[0.03] text-white shadow-none">
         <CardContent className="space-y-5 p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start gap-4">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-3xl font-semibold">{displayStock.name}</h2>
@@ -1517,19 +1571,9 @@ function StockIdeaCardLayout({
                 <span>
                   {displayStock.code} · {displayStock.industry || '行业待识别'}
                 </span>
-                <Badge className={readableBadgeClass('default')}>{data.analysisMode === 'ai' ? 'AI 分析' : '规则分析'}</Badge>
                 <Badge className={emotionChipClass(phaseInfo?.tone)}>{data.futureOutlook.analystConsensus.stance}</Badge>
               </div>
             </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full border-white/10 bg-slate-950/60 px-3 text-slate-200 hover:bg-slate-900"
-              onClick={() => setAiInsightOpen(true)}
-            >
-              <Bot className="h-4 w-4" />
-            </Button>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
@@ -1544,13 +1588,16 @@ function StockIdeaCardLayout({
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
                     <div className="text-sm font-semibold text-cyan-200">整体认知与定位</div>
-                    <p className="mt-2 text-sm leading-7 text-slate-100">{data.marketImpression}</p>
+                    <p className="mt-2 text-sm leading-7 text-slate-100">
+                      {data.marketImpression}
+                      <InlineSourceMarkers sources={marketSources} tone="positive" />
+                    </p>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
                       <div className="text-sm font-semibold text-slate-100">投资者关注度与市场地位</div>
                       <p className="mt-2 text-sm leading-7 text-slate-300">
-                        {data.boardContext?.summary || '当前市场主要围绕公司自身公告和核心经营线索定价。'}
+                        {data.boardContext?.summary || '当前市场主要围绕公司公告、经营变化和核心概念来定价。'}
                       </p>
                     </div>
                     <button
@@ -1592,11 +1639,12 @@ function StockIdeaCardLayout({
                                 {index + 1}. {item.label}
                               </span>
                               <Badge className={impactBadgeClass('positive', level)}>{level}</Badge>
+                              <InlineSourceMarkers sources={item.evidence} tone="positive" />
                             </div>
                             <div className="mt-3 text-sm leading-7 text-slate-100">{item.thesis}</div>
                             <div className="mt-2 text-sm leading-7 text-slate-300">
                               判断依据：{item.importance}
-                              <InlineSourceMarker title={evidence?.title} url={evidence?.url} />
+                              <InlineSourceMarker title={evidence?.title} url={evidence?.url} tone="positive" />
                             </div>
                           </button>
                         );
@@ -1631,11 +1679,12 @@ function StockIdeaCardLayout({
                                 {index + 1}. {item.label}
                               </span>
                               <Badge className={impactBadgeClass('risk', level)}>{level}</Badge>
+                              <InlineSourceMarkers sources={item.evidence} tone="risk" />
                             </div>
                             <div className="mt-3 text-sm leading-7 text-slate-100">{item.thesis}</div>
                             <div className="mt-2 text-sm leading-7 text-slate-300">
                               风险分析依据：{item.importance}
-                              <InlineSourceMarker title={evidence?.title} url={evidence?.url} />
+                              <InlineSourceMarker title={evidence?.title} url={evidence?.url} tone="risk" />
                             </div>
                           </button>
                         );
@@ -1688,9 +1737,7 @@ function StockIdeaCardLayout({
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="text-sm font-semibold text-white">估值变化预期</div>
                     <div className="mt-2 text-sm leading-7 text-slate-300">{data.futureOutlook.valuationOutlook.currentLevel}</div>
-                    <div className="mt-2 text-sm leading-7 text-slate-300">
-                      目标估值区间：{data.futureOutlook.valuationOutlook.targetRange}
-                    </div>
+                    <div className="mt-2 text-sm leading-7 text-slate-300">目标估值区间：{data.futureOutlook.valuationOutlook.targetRange}</div>
                     <div className="mt-3 grid gap-4 md:grid-cols-2">
                       <div>
                         <div className="text-sm font-medium text-red-200">上行驱动</div>
@@ -1726,46 +1773,55 @@ function StockIdeaCardLayout({
                   <div className="text-lg font-semibold">补充跟踪</div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {data.boardContext ? (
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={readableBadgeClass(data.boardContext.industry ? 'cyan' : 'amber')}>
-                          {data.boardContext.industry || '行业待识别'}
-                        </Badge>
-                        <Badge className={boardRoleChipClass(data.boardContext.role)}>{data.boardContext.role}</Badge>
-                        {typeof data.boardContext.boardPct === 'number' ? (
-                          <Badge className={priceBadgeClass(data.boardContext.boardPct)}>{percentText(data.boardContext.boardPct)}</Badge>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 text-sm leading-7 text-slate-300">
-                        {data.boardContext.roleReason || data.boardContext.summary}
-                      </div>
-                      {linkedBoardStocks.length > 0 ? (
-                        <div className="mt-4 space-y-2">
-                          <div className="text-sm font-medium text-slate-200">同板块联动票</div>
-                          {linkedBoardStocks.map((stock) => (
-                            <div key={`${stock.code}-${stock.name}`} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                              <div>
-                                <div className="text-sm font-medium text-white">
-                                  {stock.name} {stock.code ? <span className="text-xs text-slate-500">{stock.code}</span> : null}
-                                </div>
-                                <div className="mt-1 text-xs leading-5 text-slate-400">{stock.reason}</div>
-                              </div>
-                              {typeof stock.pct === 'number' ? (
-                                <div className={`text-sm font-semibold ${priceTextClass(stock.pct)}`}>{percentText(stock.pct)}</div>
-                              ) : null}
-                            </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                    <div className="text-sm font-semibold text-white">核心概念</div>
+                    {coreConcepts.length > 0 ? (
+                      <div className="mt-3 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          {coreConcepts.map((concept) => (
+                            <a
+                              key={concept.name}
+                              href={buildConceptSearchUrl(concept.name)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition hover:border-white/25 ${
+                                concept.tone === 'positive'
+                                  ? 'border-red-400/20 bg-red-500/10 text-red-200'
+                                  : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-200'
+                              }`}
+                            >
+                              {concept.name}
+                            </a>
                           ))}
                         </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                        <div className="space-y-2">
+                          {coreConcepts.map((concept) => (
+                            <a
+                              key={`${concept.name}-search`}
+                              href={buildStockSearchUrl(concept.name)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3 transition hover:border-white/20 hover:bg-white/[0.05]"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-sm font-medium text-white">搜索“{concept.name}”联动个股</div>
+                                <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-slate-400">{concept.reason}</div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-sm text-slate-400">[数据暂不可用]</div>
+                    )}
+                  </div>
 
                   <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                     <div className="text-sm font-semibold text-white">补充验证</div>
-                    <div className="mt-3 space-y-3">
-                      {supplementalNews.length > 0 ? (
-                        supplementalNews.map((signal, index) => (
+                    {supplementalNews.length > 0 ? (
+                      <div className="mt-3 space-y-3">
+                        {supplementalNews.map((signal, index) => (
                           <div key={`${signal.label}-${signal.news.url}-${index}`} className={index > 0 ? 'border-t border-white/10 pt-3' : ''}>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                               <Badge
@@ -1773,7 +1829,7 @@ function StockIdeaCardLayout({
                                   signal.tone === 'positive'
                                     ? readableBadgeClass('red')
                                     : signal.tone === 'risk'
-                                      ? readableBadgeClass('emerald')
+                                      ? readableBadgeClass('cyan')
                                       : readableBadgeClass('default')
                                 }
                               >
@@ -1783,14 +1839,17 @@ function StockIdeaCardLayout({
                             </div>
                             <div className="mt-2 text-sm leading-7 text-slate-300">
                               {signal.description}
-                              <InlineSourceMarker title={signal.news.title} url={signal.news.url} />
+                              <InlineSourceMarkers
+                                sources={[{ title: signal.news.title, url: signal.news.url }]}
+                                tone={signal.tone === 'positive' ? 'positive' : 'risk'}
+                              />
                             </div>
                           </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-slate-400">[数据暂不可用]</div>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-sm text-slate-400">[数据暂不可用]</div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1978,10 +2037,6 @@ export default function StockHighlightsPrototype() {
       ),
     [linkedFocusNews],
   );
-  const mainlineStrength = useMemo(
-    () => (data ? getMainlineStrength(data, sortedHighlights, verificationSignals, turningPointGroups) : null),
-    [data, sortedHighlights, verificationSignals, turningPointGroups],
-  );
   const emotionDrivers = useMemo(
     () => (data ? getEmotionDrivers(data, phaseInfo) : null),
     [data, phaseInfo],
@@ -1999,7 +2054,32 @@ export default function StockHighlightsPrototype() {
     [sortedHighlights],
   );
   const supplementalNews = useMemo(() => verificationSignals.slice(0, 3), [verificationSignals]);
-  const linkedBoardStocks = useMemo(() => data?.boardContext?.linkedStocks.slice(0, 4) ?? [], [data?.boardContext?.linkedStocks]);
+  const coreConcepts = useMemo(() => {
+    const seen = new Set<string>();
+    const candidates = [...positiveHighlights, ...riskHighlights];
+    const concepts: Array<{ name: string; tone: 'positive' | 'risk'; reason: string }> = [];
+
+    for (const item of candidates) {
+      for (const rawValue of [item.label, item.category]) {
+        const name = normalizeConceptName(rawValue || '');
+        if (!name || name.length < 2 || seen.has(name)) {
+          continue;
+        }
+        seen.add(name);
+        concepts.push({
+          name,
+          tone: item.side === 'positive' ? 'positive' : 'risk',
+          reason: item.importance || item.thesis,
+        });
+        break;
+      }
+      if (concepts.length >= 3) {
+        break;
+      }
+    }
+
+    return concepts;
+  }, [positiveHighlights, riskHighlights]);
 
   const watched = useMemo(
     () => !!selectedStockForList && watchlist.some((item) => item.code === selectedStockForList.code),
@@ -2063,7 +2143,6 @@ export default function StockHighlightsPrototype() {
     const nextProfiles = [...modelProfiles, nextProfile];
     persistProfiles(nextProfiles, nextProfile.id);
   };
-
   const handleRemoveProfile = (profileId: string) => {
     const nextProfiles = modelProfiles.filter((profile) => profile.id !== profileId);
     const nextActiveId = activeProfileId === profileId ? DEFAULT_MODEL_PROFILES[0].id : activeProfileId;
@@ -2077,7 +2156,7 @@ export default function StockHighlightsPrototype() {
           <section className="space-y-4">
             <div className="flex items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] px-4 py-3">
               <div className="min-w-0">
-                <div className="text-xl font-semibold tracking-tight text-white">AI 个股短线看点</div>
+                <div className="text-xl font-semibold tracking-tight text-white">AI个股看点</div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -2262,12 +2341,11 @@ export default function StockHighlightsPrototype() {
                   displayStock={displayStock}
                   watched={watched}
                   toggleWatchlist={toggleWatchlist}
-                  setAiInsightOpen={setAiInsightOpen}
                   setEmotionOpen={setEmotionOpen}
                   setActiveHighlight={setActiveHighlight}
                   positiveHighlights={positiveHighlights}
                   riskHighlights={riskHighlights}
-                  linkedBoardStocks={linkedBoardStocks}
+                  coreConcepts={coreConcepts}
                   supplementalNews={supplementalNews}
                   phaseInfo={phaseInfo}
                   stageInfo={stageInfo}
