@@ -873,6 +873,41 @@ function SourceTitleLink({
   );
 }
 
+function InlineSourceMarker({
+  title,
+  url,
+  index = 1,
+  className = '',
+}: {
+  title?: string | null;
+  url?: string | null;
+  index?: number;
+  className?: string;
+}) {
+  if (!title && !url) {
+    return null;
+  }
+
+  return (
+    <sup className={`ml-1 align-super text-[10px] font-semibold leading-none ${className}`.trim()}>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          title={title || '打开来源'}
+          aria-label={title ? `打开来源：${title}` : '打开来源'}
+          className="text-cyan-200 underline-offset-2 transition hover:text-cyan-100 hover:underline"
+        >
+          [{index}]
+        </a>
+      ) : (
+        <span className="text-slate-400">[{index}]</span>
+      )}
+    </sup>
+  );
+}
+
 function getRadarValue(data: StockHighlightsResponse | null, label: string) {
   return data?.radar.find((point) => point.k === label)?.v ?? 0;
 }
@@ -1190,26 +1225,10 @@ function MainlineTimelineDialog({
                 </Badge>
                 {item.source ? <Badge className={readableBadgeClass('default')}>{item.source}</Badge> : null}
               </div>
-              {item.url && item.linkTitle === item.detail ? (
-                <div className="mt-3">
-                  <SourceTitleLink
-                    title={item.detail}
-                    url={item.url}
-                    className="text-sm leading-6 text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                  />
-                </div>
-              ) : (
-                <div className="mt-3 text-sm leading-6 text-slate-200">{item.detail}</div>
-              )}
-              {item.linkTitle && item.linkTitle !== item.detail ? (
-                <div className="mt-3">
-                  <SourceTitleLink
-                    title={item.linkTitle}
-                    url={item.url}
-                    className="text-sm font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                  />
-                </div>
-              ) : null}
+              <div className="mt-3 text-sm leading-6 text-slate-200">
+                {item.detail}
+                <InlineSourceMarker title={item.linkTitle || item.detail} url={item.url} />
+              </div>
             </div>
           ))}
         </div>
@@ -1987,31 +2006,19 @@ export default function StockHighlightsPrototype() {
                             {primaryCurrentKey ? (
                               <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                                 <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">当前关键证据</div>
-                                <div className="mt-2 text-sm leading-6 text-slate-100">{primaryCurrentKey}</div>
-                                {mainlineEvidence ? (
-                                  <div className="mt-3">
-                                    <SourceTitleLink
-                                      title={mainlineEvidence.title}
-                                      url={mainlineEvidence.url}
-                                      className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                                    />
-                                  </div>
-                                ) : null}
+                                <div className="mt-2 text-sm leading-6 text-slate-100">
+                                  {primaryCurrentKey}
+                                  <InlineSourceMarker title={mainlineEvidence?.title} url={mainlineEvidence?.url} />
+                                </div>
                               </div>
                             ) : null}
                             {primaryValidation ? (
                               <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                                 <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-300">后续验证</div>
-                                <div className="mt-2 text-sm leading-6 text-slate-100">{primaryValidation}</div>
-                                {mainlineEvidence ? (
-                                  <div className="mt-3">
-                                    <SourceTitleLink
-                                      title={mainlineEvidence.title}
-                                      url={mainlineEvidence.url}
-                                      className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                                    />
-                                  </div>
-                                ) : null}
+                                <div className="mt-2 text-sm leading-6 text-slate-100">
+                                  {primaryValidation}
+                                  <InlineSourceMarker title={mainlineEvidence?.title} url={mainlineEvidence?.url} />
+                                </div>
                               </div>
                             ) : null}
                           </div>
@@ -2089,16 +2096,10 @@ export default function StockHighlightsPrototype() {
                                   </div>
                                 </div>
                                 <div className="mt-3 text-sm leading-6 text-slate-100">{item.thesis}</div>
-                                <div className="mt-3 text-sm leading-6 text-slate-300">{item.importance}</div>
-                                {evidence ? (
-                                  <div className="mt-3">
-                                    <SourceTitleLink
-                                      title={evidence.title}
-                                      url={evidence.url}
-                                      className="text-sm font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                                    />
-                                  </div>
-                                ) : null}
+                                <div className="mt-3 text-sm leading-6 text-slate-300">
+                                  {item.importance}
+                                  <InlineSourceMarker title={evidence?.title} url={evidence?.url} />
+                                </div>
                                 <div className="mt-4 space-y-2">
                                   {item.evidenceChain.slice(0, 3).map((chainItem, index) => (
                                     <div key={`${item.id}-chain-${index}`} className="flex gap-2 text-sm text-slate-200">
@@ -2125,16 +2126,10 @@ export default function StockHighlightsPrototype() {
                                 <div key={`${item.text}-${index}`} className="flex gap-3">
                                   <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300" />
                                   <div className="min-w-0">
-                                    <div className="text-sm leading-6 text-slate-300">{item.text}</div>
-                                    {item.evidence ? (
-                                      <div className="mt-2">
-                                        <SourceTitleLink
-                                          title={item.evidence.title}
-                                          url={item.evidence.url}
-                                          className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                                        />
-                                      </div>
-                                    ) : null}
+                                    <div className="text-sm leading-6 text-slate-300">
+                                      {item.text}
+                                      <InlineSourceMarker title={item.evidence?.title} url={item.evidence?.url} />
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -2186,16 +2181,8 @@ export default function StockHighlightsPrototype() {
                                         </div>
                                         <div className="mt-2 text-sm leading-6 text-slate-300">
                                           {currentKey || item.importance}
+                                          <InlineSourceMarker title={evidence?.title} url={evidence?.url} />
                                         </div>
-                                        {evidence ? (
-                                          <div className="mt-2">
-                                            <SourceTitleLink
-                                              title={evidence.title}
-                                              url={evidence.url}
-                                              className="text-xs font-medium text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                                            />
-                                          </div>
-                                        ) : null}
                                         {validation ? (
                                           <div className="mt-2 text-xs leading-5 text-slate-500">后续看：{validation}</div>
                                         ) : null}
@@ -2362,13 +2349,9 @@ export default function StockHighlightsPrototype() {
                                   {signal.news.source ? <Badge className={readableBadgeClass('cyan')}>{signal.news.source}</Badge> : null}
                                   <span>{signal.news.time}</span>
                                 </div>
-                                <div className="mt-2 text-sm leading-6 text-slate-300">{signal.description}</div>
-                                <div className="mt-2">
-                                  <SourceTitleLink
-                                    title={signal.news.title}
-                                    url={signal.news.url}
-                                    className="text-sm font-medium leading-6 text-cyan-200 underline-offset-4 transition hover:text-cyan-100 hover:underline"
-                                  />
+                                <div className="mt-2 text-sm leading-6 text-slate-300">
+                                  {signal.description}
+                                  <InlineSourceMarker title={signal.news.title} url={signal.news.url} />
                                 </div>
                               </div>
                             </div>
