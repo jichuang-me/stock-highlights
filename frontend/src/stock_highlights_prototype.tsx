@@ -2037,6 +2037,10 @@ export default function StockHighlightsPrototype() {
       ),
     [linkedFocusNews],
   );
+  const mainlineStrength = useMemo(
+    () => (data ? getMainlineStrength(data, sortedHighlights, verificationSignals, turningPointGroups) : null),
+    [data, sortedHighlights, verificationSignals, turningPointGroups],
+  );
   const emotionDrivers = useMemo(
     () => (data ? getEmotionDrivers(data, phaseInfo) : null),
     [data, phaseInfo],
