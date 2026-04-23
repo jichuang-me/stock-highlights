@@ -502,6 +502,34 @@ def _build_future_outlook(
     )
 
 
+def _merge_ai_future_outlook(future_outlook: FutureOutlook, ai_summary: Dict[str, Any]) -> FutureOutlook:
+    consensus_stance = ai_summary.get("analystConsensusStance")
+    consensus_rationale = ai_summary.get("analystConsensusRationale")
+    short_term_catalysts = ai_summary.get("shortTermCatalysts") or []
+    short_term_earnings = ai_summary.get("shortTermEarningsExpectation")
+    valuation_current = ai_summary.get("valuationCurrentLevel")
+    valuation_target = ai_summary.get("valuationTargetRange")
+    valuation_upside = ai_summary.get("valuationUpsideDrivers") or []
+    valuation_downside = ai_summary.get("valuationDownsideRisks") or []
+
+    return FutureOutlook(
+        analystConsensus=AnalystConsensus(
+            stance=consensus_stance or future_outlook.analystConsensus.stance,
+            rationale=consensus_rationale or future_outlook.analystConsensus.rationale,
+        ),
+        shortTermOutlook=ShortTermOutlook(
+            catalysts=short_term_catalysts or future_outlook.shortTermOutlook.catalysts,
+            earningsExpectation=short_term_earnings or future_outlook.shortTermOutlook.earningsExpectation,
+        ),
+        valuationOutlook=ValuationOutlook(
+            currentLevel=valuation_current or future_outlook.valuationOutlook.currentLevel,
+            targetRange=valuation_target or future_outlook.valuationOutlook.targetRange,
+            upsideDrivers=valuation_upside or future_outlook.valuationOutlook.upsideDrivers,
+            downsideRisks=valuation_downside or future_outlook.valuationOutlook.downsideRisks,
+        ),
+    )
+
+
 async def _build_highlights_response(
     code: str,
     request: Request,
@@ -629,6 +657,8 @@ async def _build_highlights_response(
         board_context,
         company_facts,
     )
+    if ai_summary:
+        future_outlook = _merge_ai_future_outlook(future_outlook, ai_summary)
 
     radar = [
         RadarPoint(k="人气热度", v=_clamp(float(hotness["popularity"]))),

@@ -21,16 +21,20 @@ _analysis_jobs: set[str] = set()
 _analysis_lock = threading.Lock()
 
 SYSTEM_PROMPT = """
-你是一名面向 A 股短线交易的中文个股看点分析助手。
-你的任务不是复述资讯，而是基于给定的公告、快讯、价格和热度信息，
-提炼出当前这只股票最值得短线关注的主线、情绪和风险。
+你是一名面向 A 股的中文个股看点分析助手。
+你的目标不是复述资讯，而是基于给定的公告、快讯、价格、热度、公司主营和估值信息，
+生成更接近投资研究卡片的结论，兼顾价值投资视角和短期催化判断。
 
 如果上下文里有 focusHighlights，你必须优先围绕这些焦点看点写结论，
-不要重新罗列一批重复标题。请优先抓最重要的一条主线，
+不要重新罗列一批重复标题。请优先抓最重要的一条主线或最关键矛盾，
 并在 marketImpression 中明确提到：
 1. 当前最强驱动是什么
 2. 当前关键证据是什么
 3. 接下来要验证或防守的点是什么
+
+除了 headline 和 marketImpression，还请尽量返回更完整的结构化字段，
+让结果更接近“市场印象 / 分析师共识 / 短期预期 / 估值变化预期”四块卡片。
+如果某项没有把握，可以留空，不要编造具体数字。
 
 请严格返回 JSON，格式如下：
 {
@@ -39,7 +43,15 @@ SYSTEM_PROMPT = """
   "sentiment": "positive | negative | neutral",
   "topPositiveLabel": "从 focusHighlights 里选最该交易的亮点标签，没有就留空",
   "topRiskLabel": "从 focusHighlights 里选最该防守的风险标签，没有就留空",
-  "keyTurningPoint": "一句话写出当前最重要的转折观察点"
+  "keyTurningPoint": "一句话写出当前最重要的转折观察点",
+  "analystConsensusStance": "看好 | 中性 | 看空",
+  "analystConsensusRationale": "100字以内，说明整体看法和主要逻辑",
+  "shortTermCatalysts": ["1-3个月内最值得跟踪的催化剂，最多3条"],
+  "shortTermEarningsExpectation": "80字以内，说明1-3个月内业绩或经营验证重点",
+  "valuationCurrentLevel": "80字以内，概括当前估值所处状态，不必强行给数字",
+  "valuationTargetRange": "目标估值区间或[数据暂不可用]",
+  "valuationUpsideDrivers": ["上行驱动，最多3条"],
+  "valuationDownsideRisks": ["下行风险，最多3条"]
 }
 """
 
@@ -138,9 +150,35 @@ def _normalize_result(result: Dict[str, Any], model_name: str, profile_label: st
     top_positive_label = str(result.get("topPositiveLabel", "")).strip()
     top_risk_label = str(result.get("topRiskLabel", "")).strip()
     key_turning_point = str(result.get("keyTurningPoint", "")).strip()
+    analyst_consensus_stance = str(result.get("analystConsensusStance", "")).strip()
+    analyst_consensus_rationale = str(result.get("analystConsensusRationale", "")).strip()
+    short_term_earnings = str(result.get("shortTermEarningsExpectation", "")).strip()
+    valuation_current_level = str(result.get("valuationCurrentLevel", "")).strip()
+    valuation_target_range = str(result.get("valuationTargetRange", "")).strip()
+
+    def normalize_list(value: Any, limit: int = 3, width: int = 120) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        items: List[str] = []
+        seen = set()
+        for raw in value:
+            text = str(raw or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            items.append(text[:width])
+            if len(items) >= limit:
+                break
+        return items
+
+    short_term_catalysts = normalize_list(result.get("shortTermCatalysts"))
+    valuation_upside_drivers = normalize_list(result.get("valuationUpsideDrivers"))
+    valuation_downside_risks = normalize_list(result.get("valuationDownsideRisks"))
 
     if sentiment not in {"positive", "negative", "neutral"}:
         sentiment = "neutral"
+    if analyst_consensus_stance not in {"看好", "中性", "看空"}:
+        analyst_consensus_stance = ""
 
     if not headline or not market_impression:
         return None
@@ -154,6 +192,14 @@ def _normalize_result(result: Dict[str, Any], model_name: str, profile_label: st
         "topPositiveLabel": top_positive_label[:32] or None,
         "topRiskLabel": top_risk_label[:32] or None,
         "keyTurningPoint": key_turning_point[:120] or None,
+        "analystConsensusStance": analyst_consensus_stance or None,
+        "analystConsensusRationale": analyst_consensus_rationale[:180] or None,
+        "shortTermCatalysts": short_term_catalysts,
+        "shortTermEarningsExpectation": short_term_earnings[:160] or None,
+        "valuationCurrentLevel": valuation_current_level[:180] or None,
+        "valuationTargetRange": valuation_target_range[:80] or None,
+        "valuationUpsideDrivers": valuation_upside_drivers,
+        "valuationDownsideRisks": valuation_downside_risks,
     }
 
 
