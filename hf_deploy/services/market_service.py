@@ -78,6 +78,18 @@ def _safe_optional_int(value: Any) -> Optional[int]:
         return None
 
 
+def _normalize_metric_value(value: Any, max_reasonable: float, divisor: float = 100.0) -> str:
+    parsed = _safe_optional_float(value)
+    if parsed is None:
+        return "-"
+    normalized = parsed
+    if abs(normalized) > max_reasonable and abs(normalized) <= max_reasonable * divisor:
+        normalized = normalized / divisor
+    if abs(normalized) > max_reasonable:
+        return "-"
+    return f"{normalized:.2f}".rstrip("0").rstrip(".")
+
+
 def _normalize_board_text(value: Any) -> str:
     text = str(value or "").strip().lower()
     for token in ("行业", "板块", "概念", "申万", "同花顺", " ", "-", "_", "/", "\\", "、", "·", "（", "）", "(", ")"):
@@ -497,13 +509,63 @@ def fetch_eastmoney_indicators(code: str) -> Dict[str, Any]:
         resp = HTTP_SESSION.get(url, timeout=REQUEST_TIMEOUT)
         data = resp.json().get("data") or {}
         return {
-            "pe": data.get("f162", "-"),
-            "pb": data.get("f167", "-"),
-            "roe": data.get("f117", "-"),
+            "pe": _normalize_metric_value(data.get("f162"), 200),
+            "pb": _normalize_metric_value(data.get("f167"), 50),
+            "roe": _normalize_metric_value(data.get("f117"), 100),
         }
     except Exception as exc:
         logging.error("Eastmoney indicators fetch failed for %s: %s", code, exc)
         return {"pe": "-", "pb": "-", "roe": "-"}
+
+
+@lru_cache(maxsize=128)
+def fetch_company_profile_facts(code: str) -> Dict[str, Any]:
+    if ak is None:
+        return {
+            "businessSummary": "",
+            "productTypes": [],
+            "productNames": [],
+            "businessScope": "",
+        }
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            biz_df = ak.stock_zyjs_ths(symbol=code)
+    except Exception as exc:
+        logging.warning("THS company profile fetch failed for %s: %s", code, exc)
+        return {
+            "businessSummary": "",
+            "productTypes": [],
+            "productNames": [],
+            "businessScope": "",
+        }
+
+    if biz_df is None or biz_df.empty:
+        return {
+            "businessSummary": "",
+            "productTypes": [],
+            "productNames": [],
+            "businessScope": "",
+        }
+
+    first = biz_df.iloc[0]
+
+    def split_text(value: Any) -> List[str]:
+        raw = str(value or "").strip()
+        if not raw:
+            return []
+        items = [raw]
+        for splitter in ("、", "，", ",", "；", ";"):
+            if splitter in raw:
+                items.extend([part.strip() for part in raw.split(splitter)])
+        return _dedupe_keep_order(items)
+
+    return {
+        "businessSummary": str(first.get("主营业务") or "").strip(),
+        "productTypes": split_text(first.get("产品类型"))[:8],
+        "productNames": split_text(first.get("产品名称"))[:12],
+        "businessScope": str(first.get("经营范围") or "").strip(),
+    }
 
 
 @lru_cache(maxsize=128)
