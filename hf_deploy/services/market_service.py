@@ -569,6 +569,111 @@ def fetch_company_profile_facts(code: str) -> Dict[str, Any]:
 
 
 @lru_cache(maxsize=128)
+def fetch_analyst_snapshot(code: str, current_price: float = 0.0) -> Dict[str, Any]:
+    default_result = {
+        "industry": "",
+        "stance": "",
+        "ratingSummary": "",
+        "targetPrice": None,
+        "targetRange": "[数据暂不可用]",
+        "targetSpace": "",
+        "latestRatings": [],
+        "reportTitles": [],
+        "epsForecasts": [],
+    }
+
+    if ak is None:
+        return default_result
+
+    result = dict(default_result)
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            rating_df = ak.stock_institute_recommend_detail(symbol=code)
+        if rating_df is not None and not rating_df.empty:
+            rating_df = rating_df.copy().head(12)
+            ratings = [str(item).strip() for item in rating_df["最新评级"].tolist() if str(item).strip()]
+            counts: Dict[str, int] = {}
+            for rating in ratings:
+                counts[rating] = counts.get(rating, 0) + 1
+            if counts:
+                top_rating = sorted(counts.items(), key=lambda x: x[1], reverse=True)[0][0]
+                stance_map = {"买入": "看好", "增持": "看好", "推荐": "看好", "中性": "中性", "持有": "中性", "回避": "看空", "卖出": "看空"}
+                result["stance"] = stance_map.get(top_rating, "中性")
+                result["ratingSummary"] = "，".join(f"{k}{v}家" for k, v in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:3])
+
+            target_prices = [price for price in (_safe_optional_float(v) for v in rating_df["目标价"].tolist()) if price is not None and price > 0]
+            if target_prices:
+                min_target = min(target_prices)
+                max_target = max(target_prices)
+                avg_target = round(sum(target_prices) / len(target_prices), 2)
+                result["targetPrice"] = avg_target
+                if min_target == max_target:
+                    result["targetRange"] = f"{avg_target:.2f} 元"
+                else:
+                    result["targetRange"] = f"{min_target:.2f} - {max_target:.2f} 元"
+                if current_price and current_price > 0:
+                    target_space = (avg_target - current_price) / current_price * 100
+                    result["targetSpace"] = f"{target_space:+.1f}%"
+
+            industry_values = [str(v).strip() for v in rating_df["行业"].tolist() if str(v).strip()]
+            if industry_values:
+                result["industry"] = industry_values[0]
+
+            result["latestRatings"] = [
+                {
+                    "rating": str(row.get("最新评级") or "").strip(),
+                    "targetPrice": _safe_optional_float(row.get("目标价")),
+                    "institution": str(row.get("评级机构") or "").strip(),
+                    "date": str(row.get("评级日期") or "").strip(),
+                }
+                for _, row in rating_df.head(5).iterrows()
+            ]
+    except Exception as exc:
+        logging.warning("Analyst rating snapshot fetch failed for %s: %s", code, exc)
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            report_df = ak.stock_research_report_em(symbol=code)
+        if report_df is not None and not report_df.empty:
+            result["reportTitles"] = [
+                {
+                    "title": str(row.get("报告名称") or "").strip(),
+                    "rating": str(row.get("东财评级") or "").strip(),
+                    "institution": str(row.get("机构") or "").strip(),
+                    "date": str(row.get("日期") or "").strip(),
+                    "url": str(row.get("报告PDF链接") or "").strip(),
+                }
+                for _, row in report_df.head(5).iterrows()
+                if str(row.get("报告名称") or "").strip()
+            ]
+            if not result["industry"]:
+                industry_values = [str(v).strip() for v in report_df["行业"].tolist() if str(v).strip()]
+                if industry_values:
+                    result["industry"] = industry_values[0]
+    except Exception as exc:
+        logging.warning("Research report snapshot fetch failed for %s: %s", code, exc)
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            forecast_df = ak.stock_profit_forecast_ths(symbol=code)
+        if forecast_df is not None and not forecast_df.empty:
+            result["epsForecasts"] = [
+                {
+                    "year": str(row.get("年度") or "").strip(),
+                    "institutionCount": _safe_optional_int(row.get("预测机构数")),
+                    "avgEps": _safe_optional_float(row.get("均值")),
+                    "industryAvgEps": _safe_optional_float(row.get("行业平均数")),
+                }
+                for _, row in forecast_df.head(3).iterrows()
+            ]
+    except Exception as exc:
+        logging.warning("Profit forecast snapshot fetch failed for %s: %s", code, exc)
+
+    return result
+
+
+@lru_cache(maxsize=128)
 def fetch_board_context(code: str, stock_name: str, pct_change: float, industry_hint: str = "") -> Dict[str, Any]:
     if ak is None:
         return {

@@ -22,6 +22,7 @@ try:
     from ..services.announcement_service import fetch_announcements
     from ..services.highlight_engine import analyze_highlights
     from ..services.market_service import (
+        fetch_analyst_snapshot,
         fetch_board_context,
         fetch_company_profile_facts,
         fetch_eastmoney_indicators,
@@ -48,6 +49,7 @@ except ImportError:
     from services.announcement_service import fetch_announcements
     from services.highlight_engine import analyze_highlights
     from services.market_service import (
+        fetch_analyst_snapshot,
         fetch_board_context,
         fetch_company_profile_facts,
         fetch_eastmoney_indicators,
@@ -356,16 +358,40 @@ def _consensus_stance(sentiment: str) -> str:
     return "中性"
 
 
-def _build_consensus(summary_sentiment: str, market_impression: str, board_context: Optional[Dict[str, Any]]) -> AnalystConsensus:
-    stance = _consensus_stance(summary_sentiment)
+def _build_consensus(
+    summary_sentiment: str,
+    market_impression: str,
+    board_context: Optional[Dict[str, Any]],
+    analyst_snapshot: Optional[Dict[str, Any]],
+) -> AnalystConsensus:
+    stance = (analyst_snapshot or {}).get("stance") or _consensus_stance(summary_sentiment)
     board_note = ""
     if board_context and board_context.get("roleReason"):
         board_note = f" {board_context['roleReason']}"
-    rationale = f"{market_impression}{board_note}".strip()[:220] or "[数据暂不可用]"
+    rating_summary = (analyst_snapshot or {}).get("ratingSummary") or ""
+    target_range = (analyst_snapshot or {}).get("targetRange") or ""
+    target_space = (analyst_snapshot or {}).get("targetSpace") or ""
+    report_titles = (analyst_snapshot or {}).get("reportTitles") or []
+    report_note = ""
+    if report_titles:
+        first_title = report_titles[0].get("title") or ""
+        if first_title:
+            report_note = f" 近端研报更关注“{first_title}”。"
+
+    rationale = f"{market_impression}{board_note}".strip()
+    if rating_summary:
+        rationale += f" 当前机构评级分布为 {rating_summary}。"
+    if target_range and target_range != "[数据暂不可用]":
+        rationale += f" 可见目标价区间 {target_range}"
+        if target_space:
+            rationale += f"，对应空间 {target_space}"
+        rationale += "。"
+    rationale += report_note
+    rationale = rationale[:260] or "[数据暂不可用]"
     return AnalystConsensus(stance=stance, rationale=rationale)
 
 
-def _build_short_term_outlook(highlights: List[dict], news: List[dict]) -> ShortTermOutlook:
+def _build_short_term_outlook(highlights: List[dict], news: List[dict], analyst_snapshot: Optional[Dict[str, Any]]) -> ShortTermOutlook:
     catalysts: List[str] = []
 
     for item in highlights:
@@ -375,6 +401,14 @@ def _build_short_term_outlook(highlights: List[dict], news: List[dict]) -> Short
             catalysts.append("双主业结构里成长业务收入占比和毛利率是否继续抬升。")
         elif str(item.get("id") or "").startswith("profile-valuation"):
             catalysts.append("估值是否仍处于可接受区间，以及基本面能否支撑继续给溢价。")
+        if len(catalysts) >= 3:
+            break
+
+    report_titles = (analyst_snapshot or {}).get("reportTitles") or []
+    for item in report_titles[:3]:
+        title = str(item.get("title") or "").strip()
+        if title:
+            catalysts.append(f"券商跟踪重点：{title}")
         if len(catalysts) >= 3:
             break
 
@@ -408,6 +442,7 @@ def _build_short_term_outlook(highlights: List[dict], news: List[dict]) -> Short
     positive_labels = [str(item.get("label") or "").strip() for item in highlights if item.get("side") == "positive"]
     risk_labels = [str(item.get("label") or "").strip() for item in highlights if item.get("side") == "risk"]
 
+    eps_forecasts = (analyst_snapshot or {}).get("epsForecasts") or []
     if positive_labels:
         earnings_expectation = f"未来1-3个月更值得跟踪 {positive_labels[0]} 的兑现强度，若持续获得订单、业绩或价格验证，短期预期有望继续改善。"
     elif risk_labels:
@@ -415,19 +450,39 @@ def _build_short_term_outlook(highlights: List[dict], news: List[dict]) -> Short
     else:
         earnings_expectation = "[数据暂不可用]"
 
+    if eps_forecasts:
+        first_forecast = eps_forecasts[0]
+        year = first_forecast.get("year") or ""
+        avg_eps = first_forecast.get("avgEps")
+        institution_count = first_forecast.get("institutionCount")
+        if avg_eps:
+            eps_text = f"{year} 年机构一致预期 EPS 约 {avg_eps:.2f}"
+            if institution_count:
+                eps_text += f"，基于 {institution_count} 家机构预测"
+            eps_text += "。"
+            earnings_expectation = f"{earnings_expectation} {eps_text}"
+
     return ShortTermOutlook(
         catalysts=deduped[:3] or ["[数据暂不可用]"],
         earningsExpectation=earnings_expectation,
     )
 
 
-def _build_valuation_outlook(indicators: dict, highlights: List[dict], board_context: Optional[Dict[str, Any]]) -> ValuationOutlook:
+def _build_valuation_outlook(
+    indicators: dict,
+    highlights: List[dict],
+    board_context: Optional[Dict[str, Any]],
+    analyst_snapshot: Optional[Dict[str, Any]],
+) -> ValuationOutlook:
     pe = _metric_text(indicators.get("pe"), "x")
     pb = _metric_text(indicators.get("pb"), "x")
     roe = _metric_text(indicators.get("roe"), "%")
     current_level = f"当前估值：PE {pe}，PB {pb}，ROE {roe}。"
 
-    target_range = "[数据暂不可用]"
+    target_range = (analyst_snapshot or {}).get("targetRange") or "[数据暂不可用]"
+    target_space = (analyst_snapshot or {}).get("targetSpace") or ""
+    if target_space and target_range != "[数据暂不可用]":
+        target_range = f"{target_range}（相对当前空间 {target_space}）"
 
     upside_drivers: List[str] = []
     downside_risks: List[str] = []
@@ -465,6 +520,7 @@ def _build_future_outlook(
     news: List[dict],
     board_context: Optional[Dict[str, Any]],
     company_facts: Dict[str, Any],
+    analyst_snapshot: Optional[Dict[str, Any]],
 ) -> FutureOutlook:
     business_summary = str(company_facts.get("businessSummary") or "").strip()
     product_types = company_facts.get("productTypes") or []
@@ -472,21 +528,21 @@ def _build_future_outlook(
     if business_summary and not any(item.get("side") == "positive" for item in enriched_highlights):
         enriched_highlights.extend(_build_supplemental_positive_highlights("profile", company_facts, indicators))
 
-    analyst_consensus = _build_consensus(sentiment, market_impression, board_context)
+    analyst_consensus = _build_consensus(sentiment, market_impression, board_context, analyst_snapshot)
     if business_summary:
         analyst_consensus = AnalystConsensus(
             stance=analyst_consensus.stance,
             rationale=f"{analyst_consensus.rationale} 主营业务显示公司核心经营线围绕“{business_summary}”展开。".strip()[:260],
         )
 
-    short_term = _build_short_term_outlook(enriched_highlights, news)
+    short_term = _build_short_term_outlook(enriched_highlights, news, analyst_snapshot)
     if business_summary and short_term.earningsExpectation != "[数据暂不可用]":
         short_term = ShortTermOutlook(
             catalysts=short_term.catalysts,
             earningsExpectation=f"{short_term.earningsExpectation} 同时继续跟踪主营“{business_summary}”里更高景气业务的兑现进度。",
         )
 
-    valuation_outlook = _build_valuation_outlook(indicators, enriched_highlights, board_context)
+    valuation_outlook = _build_valuation_outlook(indicators, enriched_highlights, board_context, analyst_snapshot)
     if product_types and valuation_outlook.currentLevel != "[数据暂不可用]":
         valuation_outlook = ValuationOutlook(
             currentLevel=f"{valuation_outlook.currentLevel} 当前估值是否还有提升空间，也取决于 {product_types[0]} 等业务能否继续提供成长性。",
@@ -557,6 +613,7 @@ async def _build_highlights_response(
     )
 
     stock_price = all_prices.get(code, {"price": 0.0, "pct": 0.0})
+    analyst_snapshot = await asyncio.to_thread(fetch_analyst_snapshot, code, float(stock_price["price"]))
     highlights = analyze_highlights(raw_ann)
     news = news or _build_news_fallback(highlights, stock_price)
     board_context = await asyncio.to_thread(
@@ -656,6 +713,7 @@ async def _build_highlights_response(
         news,
         board_context,
         company_facts,
+        analyst_snapshot,
     )
     if ai_summary:
         future_outlook = _merge_ai_future_outlook(future_outlook, ai_summary)
