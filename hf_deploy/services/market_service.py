@@ -78,6 +78,16 @@ def _safe_optional_int(value: Any) -> Optional[int]:
         return None
 
 
+def _calc_yoy(current: Any, previous: Any) -> Optional[float]:
+    current_value = _safe_optional_float(current)
+    previous_value = _safe_optional_float(previous)
+    if current_value is None or previous_value is None:
+        return None
+    if abs(previous_value) < 1e-9:
+        return None
+    return round((current_value - previous_value) / abs(previous_value) * 100, 2)
+
+
 def _normalize_metric_value(value: Any, max_reasonable: float, divisor: float = 100.0) -> str:
     parsed = _safe_optional_float(value)
     if parsed is None:
@@ -669,6 +679,111 @@ def fetch_analyst_snapshot(code: str, current_price: float = 0.0) -> Dict[str, A
             ]
     except Exception as exc:
         logging.warning("Profit forecast snapshot fetch failed for %s: %s", code, exc)
+
+    return result
+
+
+@lru_cache(maxsize=128)
+def fetch_financial_snapshot(code: str) -> Dict[str, Any]:
+    default_result = {
+        "annualReportLabel": "",
+        "annualRevenue": None,
+        "annualRevenueYoY": None,
+        "annualParentNetProfit": None,
+        "annualParentNetProfitYoY": None,
+        "annualDeductNetProfit": None,
+        "annualDeductNetProfitYoY": None,
+        "quarterlyReportLabel": "",
+        "quarterlyRevenue": None,
+        "quarterlyRevenueYoY": None,
+        "quarterlyParentNetProfit": None,
+        "quarterlyParentNetProfitYoY": None,
+        "quarterlyOperateCash": None,
+        "quarterlyOperateCashYoY": None,
+        "latestDividendPer10": None,
+        "latestDividendProgress": "",
+        "latestDividendDate": "",
+    }
+    if ak is None:
+        return default_result
+
+    secucode = ("SH" if code.startswith("6") else "SZ") + code
+    result = dict(default_result)
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            yearly_df = ak.stock_profit_sheet_by_yearly_em(symbol=secucode)
+        if yearly_df is not None and not yearly_df.empty:
+            latest_annual = yearly_df.iloc[0]
+            result["annualReportLabel"] = str(latest_annual.get("REPORT_DATE_NAME") or "").strip()
+            result["annualRevenue"] = _safe_optional_float(latest_annual.get("TOTAL_OPERATE_INCOME"))
+            result["annualRevenueYoY"] = _safe_optional_float(latest_annual.get("TOTAL_OPERATE_INCOME_YOY"))
+            result["annualParentNetProfit"] = _safe_optional_float(latest_annual.get("PARENT_NETPROFIT"))
+            result["annualParentNetProfitYoY"] = _safe_optional_float(latest_annual.get("PARENT_NETPROFIT_YOY"))
+            result["annualDeductNetProfit"] = _safe_optional_float(latest_annual.get("DEDUCT_PARENT_NETPROFIT"))
+            result["annualDeductNetProfitYoY"] = _safe_optional_float(latest_annual.get("DEDUCT_PARENT_NETPROFIT_YOY"))
+    except Exception as exc:
+        logging.warning("Annual financial snapshot fetch failed for %s: %s", code, exc)
+
+    latest_quarter = None
+    same_period_quarter = None
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            quarterly_df = ak.stock_profit_sheet_by_quarterly_em(symbol=secucode)
+        if quarterly_df is not None and not quarterly_df.empty:
+            latest_quarter = quarterly_df.iloc[0]
+            result["quarterlyReportLabel"] = str(latest_quarter.get("REPORT_DATE_NAME") or "").strip()
+            latest_report_type = str(latest_quarter.get("REPORT_TYPE") or "").strip()
+            for _, row in quarterly_df.iloc[1:].iterrows():
+                if str(row.get("REPORT_TYPE") or "").strip() == latest_report_type:
+                    same_period_quarter = row
+                    break
+
+            result["quarterlyRevenue"] = _safe_optional_float(latest_quarter.get("TOTAL_OPERATE_INCOME"))
+            result["quarterlyParentNetProfit"] = _safe_optional_float(latest_quarter.get("PARENT_NETPROFIT"))
+            if same_period_quarter is not None:
+                result["quarterlyRevenueYoY"] = _calc_yoy(
+                    latest_quarter.get("TOTAL_OPERATE_INCOME"),
+                    same_period_quarter.get("TOTAL_OPERATE_INCOME"),
+                )
+                result["quarterlyParentNetProfitYoY"] = _calc_yoy(
+                    latest_quarter.get("PARENT_NETPROFIT"),
+                    same_period_quarter.get("PARENT_NETPROFIT"),
+                )
+    except Exception as exc:
+        logging.warning("Quarterly financial snapshot fetch failed for %s: %s", code, exc)
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            cash_df = ak.stock_cash_flow_sheet_by_quarterly_em(symbol=secucode)
+        if cash_df is not None and not cash_df.empty:
+            latest_cash = cash_df.iloc[0]
+            latest_cash_report_type = str(latest_cash.get("REPORT_TYPE") or "").strip()
+            same_period_cash = None
+            for _, row in cash_df.iloc[1:].iterrows():
+                if str(row.get("REPORT_TYPE") or "").strip() == latest_cash_report_type:
+                    same_period_cash = row
+                    break
+
+            result["quarterlyOperateCash"] = _safe_optional_float(latest_cash.get("NETCASH_OPERATE"))
+            if same_period_cash is not None:
+                result["quarterlyOperateCashYoY"] = _calc_yoy(
+                    latest_cash.get("NETCASH_OPERATE"),
+                    same_period_cash.get("NETCASH_OPERATE"),
+                )
+    except Exception as exc:
+        logging.warning("Quarterly cashflow snapshot fetch failed for %s: %s", code, exc)
+
+    try:
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            dividend_df = ak.stock_history_dividend_detail(symbol=code, indicator="分红")
+        if dividend_df is not None and not dividend_df.empty:
+            latest_dividend = dividend_df.iloc[0]
+            result["latestDividendPer10"] = _safe_optional_float(latest_dividend.get("派息"))
+            result["latestDividendProgress"] = str(latest_dividend.get("进度") or "").strip()
+            result["latestDividendDate"] = str(latest_dividend.get("公告日期") or "").strip()
+    except Exception as exc:
+        logging.warning("Dividend snapshot fetch failed for %s: %s", code, exc)
 
     return result
 

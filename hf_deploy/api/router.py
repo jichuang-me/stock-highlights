@@ -26,6 +26,7 @@ try:
         fetch_board_context,
         fetch_company_profile_facts,
         fetch_eastmoney_indicators,
+        fetch_financial_snapshot,
         fetch_sina_prices,
         fetch_xueqiu_hotness,
     )
@@ -53,6 +54,7 @@ except ImportError:
         fetch_board_context,
         fetch_company_profile_facts,
         fetch_eastmoney_indicators,
+        fetch_financial_snapshot,
         fetch_sina_prices,
         fetch_xueqiu_hotness,
     )
@@ -122,6 +124,7 @@ def _build_rule_market_impression(
     hotness: dict,
     indicators: dict,
     board_context: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
 ) -> str:
     business_summary = str(company_facts.get("businessSummary") or "").strip()
     product_types = company_facts.get("productTypes") or []
@@ -169,11 +172,24 @@ def _build_rule_market_impression(
     if metric_bits:
         profile_parts.append("当前可见的估值/盈利质量指标是 " + "，".join(metric_bits) + "。")
 
+    annual_profit_yoy = (financial_snapshot or {}).get("annualParentNetProfitYoY")
+    quarterly_profit_yoy = (financial_snapshot or {}).get("quarterlyParentNetProfitYoY")
+    annual_revenue_yoy = (financial_snapshot or {}).get("annualRevenueYoY")
+    dividend_per10 = (financial_snapshot or {}).get("latestDividendPer10")
+    if annual_profit_yoy is not None or quarterly_profit_yoy is not None:
+        profile_parts.append(
+            f"最新财务截面上，年报归母净利润同比 {_yoy_text(annual_profit_yoy)}，最新季度同比 {_yoy_text(quarterly_profit_yoy)}。"
+        )
+    if annual_revenue_yoy is not None and annual_revenue_yoy < 0:
+        profile_parts.append(f"但收入端仍有压力，年报营收同比 {_yoy_text(annual_revenue_yoy)}，需要继续验证改善是否可持续。")
+    if dividend_per10 is not None and dividend_per10 > 0:
+        profile_parts.append(f"公司还披露了每10股派息 {dividend_per10:.2f} 元的分红方案，对市场认知有一定支撑。")
+
     rank = str(hotness.get("rank") or "").strip()
     if rank and rank != "关注 0" and "暂不可用" not in rank:
         profile_parts.append(f"市场关注度方面，目前处于 {rank}。")
 
-    return " ".join(profile_parts)[:280] or "[数据暂不可用]"
+    return " ".join(profile_parts)[:520] or "[数据暂不可用]"
 
 
 def _impact_level(score: int) -> str:
@@ -350,6 +366,163 @@ def _metric_text(value: object, suffix: str = "") -> str:
     return f"{text}{suffix}"
 
 
+def _money_text(value: Optional[float]) -> str:
+    if value is None:
+        return "[数据暂不可用]"
+    abs_value = abs(value)
+    if abs_value >= 1e8:
+        return f"{value / 1e8:.2f} 亿元"
+    if abs_value >= 1e4:
+        return f"{value / 1e4:.2f} 万元"
+    return f"{value:.2f} 元"
+
+
+def _yoy_text(value: Optional[float]) -> str:
+    if value is None:
+        return "[数据暂不可用]"
+    return f"{value:+.2f}%"
+
+
+def _build_financial_highlights(code: str, financial_snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+    generated: List[Dict[str, Any]] = []
+
+    annual_profit_yoy = financial_snapshot.get("annualParentNetProfitYoY")
+    quarterly_profit_yoy = financial_snapshot.get("quarterlyParentNetProfitYoY")
+    annual_profit = financial_snapshot.get("annualParentNetProfit")
+    quarterly_profit = financial_snapshot.get("quarterlyParentNetProfit")
+    annual_label = financial_snapshot.get("annualReportLabel") or "最新年报"
+    quarterly_label = financial_snapshot.get("quarterlyReportLabel") or "最新季度"
+
+    if (
+        (annual_profit_yoy is not None and annual_profit_yoy >= 15)
+        or (quarterly_profit_yoy is not None and quarterly_profit_yoy >= 20)
+    ):
+        generated.append(
+            {
+                "id": f"financial-profit-{code}",
+                "side": "positive",
+                "label": "业绩增长与利润兑现",
+                "score": 86,
+                "category": "业绩兑现",
+                "why": f"{annual_label}归母净利润 {_money_text(annual_profit)}，同比 {_yoy_text(annual_profit_yoy)}；{quarterly_label}归母净利润 {_money_text(quarterly_profit)}，同比 {_yoy_text(quarterly_profit_yoy)}。",
+                "thesis": "利润增长已经从报表层面得到验证，这类依据比单纯公告催化更接近价值投资者会持续跟踪的核心逻辑。",
+                "importance": "如果年报和最新季度利润都保持较强增长，市场更容易把它理解为基本面改善而不是一次性刺激。",
+                "interpretation": "利润增长能否继续支撑估值抬升，取决于其持续性以及能否同步扩散到收入和现金流层面。",
+                "game_view": "后续重点看半年报和后续季度利润能否继续兑现，而不是只看单季高点。",
+                "evidenceChain": [
+                    f"起点：{annual_label}归母净利润 {_money_text(annual_profit)}，同比 {_yoy_text(annual_profit_yoy)}。",
+                    f"强化：{quarterly_label}归母净利润 {_money_text(quarterly_profit)}，同比 {_yoy_text(quarterly_profit_yoy)}。",
+                    "当前关键：利润增长是否由主营改善驱动，而不是单次非经常项目拉动。",
+                    "后续验证：看后续季度收入、扣非利润和现金流能否继续同步改善。",
+                ],
+                "evidence": [
+                    {
+                        "source": "东方财富利润表",
+                        "title": f"{annual_label} / {quarterly_label} 利润增长",
+                        "published_at": "最新",
+                        "url": "",
+                    }
+                ],
+            }
+        )
+
+    operate_cash = financial_snapshot.get("quarterlyOperateCash")
+    operate_cash_yoy = financial_snapshot.get("quarterlyOperateCashYoY")
+    if operate_cash is not None and operate_cash > 0 and (operate_cash_yoy is None or operate_cash_yoy >= 20):
+        generated.append(
+            {
+                "id": f"financial-cashflow-{code}",
+                "side": "positive",
+                "label": "经营现金流改善",
+                "score": 78,
+                "category": "现金流质量",
+                "why": f"{quarterly_label}经营活动现金流净额 {_money_text(operate_cash)}，同比 {_yoy_text(operate_cash_yoy)}。",
+                "thesis": "利润能不能转成现金，是区分账面增长和真实经营改善的关键一步。",
+                "importance": "经营现金流同步改善，通常说明回款和经营质量更可能支撑当前业绩增长。",
+                "interpretation": "现金流改善会提高市场对利润质量和分红能力的信任度。",
+                "game_view": "后续继续看回款、存货和应收项变化，确认现金流改善不是季节性扰动。",
+                "evidenceChain": [
+                    f"起点：{quarterly_label}经营活动现金流净额 {_money_text(operate_cash)}。",
+                    f"强化：同比变化 {_yoy_text(operate_cash_yoy)}，现金流并未弱于利润表现。",
+                    "当前关键：经营现金流是否持续好于利润增速，决定市场是否认可其质量。",
+                    "后续验证：看后续季度现金流、应收账款和存货周转变化。",
+                ],
+                "evidence": [
+                    {
+                        "source": "东方财富现金流量表",
+                        "title": f"{quarterly_label} 经营现金流净额",
+                        "published_at": "最新",
+                        "url": "",
+                    }
+                ],
+            }
+        )
+
+    dividend_per10 = financial_snapshot.get("latestDividendPer10")
+    if dividend_per10 is not None and dividend_per10 > 0:
+        generated.append(
+            {
+                "id": f"financial-dividend-{code}",
+                "side": "positive",
+                "label": "分红与股东回报",
+                "score": 70,
+                "category": "股东回报",
+                "why": f"最新分红方案为每10股派息 {dividend_per10:.2f} 元，当前进度 {financial_snapshot.get('latestDividendProgress') or '[数据暂不可用]'}。",
+                "thesis": "持续分红说明公司并非只有增长叙事，也愿意把经营成果回馈给股东。",
+                "importance": "对价值投资视角下的短期分析来说，分红能提高安全边际，也能部分验证现金流和盈利质量。",
+                "interpretation": "高分红本身不是主线，但会改善市场对公司治理和股东回报的认知。",
+                "game_view": "后续看分红方案落地、分红比例是否稳定，以及是否影响后续资本开支和成长投入。",
+                "evidenceChain": [
+                    f"起点：最新公告分红方案为每10股派息 {dividend_per10:.2f} 元。",
+                    f"强化：当前分红进度为 {financial_snapshot.get('latestDividendProgress') or '[数据暂不可用]'}。",
+                    "当前关键：市场会把分红视为现金流和治理稳定性的侧面验证。",
+                    "后续验证：看分红落地后公司是否仍能保持成长投入和利润兑现。",
+                ],
+                "evidence": [
+                    {
+                        "source": "历史分红明细",
+                        "title": f"{financial_snapshot.get('latestDividendDate') or '最新'} 分红方案",
+                        "published_at": financial_snapshot.get("latestDividendDate") or "最新",
+                        "url": "",
+                    }
+                ],
+            }
+        )
+
+    annual_revenue_yoy = financial_snapshot.get("annualRevenueYoY")
+    if annual_revenue_yoy is not None and annual_revenue_yoy < 0:
+        generated.append(
+            {
+                "id": f"financial-revenue-risk-{code}",
+                "side": "risk",
+                "label": "收入增长承压",
+                "score": 72,
+                "category": "经营压力",
+                "why": f"{annual_label}营业总收入 {_money_text(financial_snapshot.get('annualRevenue'))}，同比 {_yoy_text(annual_revenue_yoy)}。",
+                "thesis": "如果收入端已经转弱，利润改善的持续性就需要更谨慎看待。",
+                "importance": "收入承压意味着公司不能只靠利润率改善或一次性因素支撑估值，后续增长质量需要再验证。",
+                "interpretation": "市场会继续追问收入下滑是周期扰动、业务切换，还是需求端已经转弱。",
+                "game_view": "后续重点看核心主业订单、销量和收入恢复节奏。",
+                "evidenceChain": [
+                    f"起点：{annual_label}营业总收入 {_money_text(financial_snapshot.get('annualRevenue'))}，同比 {_yoy_text(annual_revenue_yoy)}。",
+                    "强化：收入没有同步走强时，利润增长更容易被质疑成阶段性改善。",
+                    "当前关键：收入何时恢复增长，决定估值修复能否真正站稳。",
+                    "后续验证：看主营订单、销量和后续季度收入变化。",
+                ],
+                "evidence": [
+                    {
+                        "source": "东方财富利润表",
+                        "title": f"{annual_label} 营业总收入",
+                        "published_at": "最新",
+                        "url": "",
+                    }
+                ],
+            }
+        )
+
+    return generated
+
+
 def _consensus_stance(sentiment: str) -> str:
     if sentiment == "positive":
         return "看好"
@@ -363,6 +536,7 @@ def _build_consensus(
     market_impression: str,
     board_context: Optional[Dict[str, Any]],
     analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
 ) -> AnalystConsensus:
     stance = (analyst_snapshot or {}).get("stance") or _consensus_stance(summary_sentiment)
     board_note = ""
@@ -371,6 +545,15 @@ def _build_consensus(
     rating_summary = (analyst_snapshot or {}).get("ratingSummary") or ""
     target_range = (analyst_snapshot or {}).get("targetRange") or ""
     target_space = (analyst_snapshot or {}).get("targetSpace") or ""
+    if (financial_snapshot or {}).get("latestDividendPer10"):
+        catalysts.append(
+            f"鍒嗙孩鏂规钀藉湴杩涘害锛氭瘡10鑲℃淳鎭?{financial_snapshot['latestDividendPer10']:.2f} 鍏冿紝褰撳墠杩涘害 {financial_snapshot.get('latestDividendProgress') or '[鏁版嵁鏆備笉鍙敤]'}銆?"
+        )
+    if (financial_snapshot or {}).get("quarterlyParentNetProfitYoY") is not None:
+        catalysts.append(
+            f"{financial_snapshot.get('quarterlyReportLabel') or '鏈€鏂板崟瀛ｅ害'}涓氱哗楠岃瘉锛氬綊姣嶅噣鍒╂鼎鍚屾瘮 {_yoy_text(financial_snapshot.get('quarterlyParentNetProfitYoY'))}銆?"
+        )
+
     report_titles = (analyst_snapshot or {}).get("reportTitles") or []
     report_note = ""
     if report_titles:
@@ -386,12 +569,21 @@ def _build_consensus(
         if target_space:
             rationale += f"，对应空间 {target_space}"
         rationale += "。"
+    annual_profit_yoy = (financial_snapshot or {}).get("annualParentNetProfitYoY")
+    quarterly_profit_yoy = (financial_snapshot or {}).get("quarterlyParentNetProfitYoY")
+    if annual_profit_yoy is not None or quarterly_profit_yoy is not None:
+        rationale += f" 骞存姤/鏈€鏂板崟瀛ｅ害褰掓瘝鍚屾瘮鍒嗗埆涓?{_yoy_text(annual_profit_yoy)} 鍜?{_yoy_text(quarterly_profit_yoy)}銆?"
     rationale += report_note
     rationale = rationale[:260] or "[数据暂不可用]"
     return AnalystConsensus(stance=stance, rationale=rationale)
 
 
-def _build_short_term_outlook(highlights: List[dict], news: List[dict], analyst_snapshot: Optional[Dict[str, Any]]) -> ShortTermOutlook:
+def _build_short_term_outlook(
+    highlights: List[dict],
+    news: List[dict],
+    analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
+) -> ShortTermOutlook:
     catalysts: List[str] = []
 
     for item in highlights:
@@ -462,6 +654,12 @@ def _build_short_term_outlook(highlights: List[dict], news: List[dict], analyst_
             eps_text += "。"
             earnings_expectation = f"{earnings_expectation} {eps_text}"
 
+    if (not eps_forecasts) and (financial_snapshot or {}).get("quarterlyParentNetProfitYoY") is not None:
+        earnings_expectation = (
+            f"{earnings_expectation} {financial_snapshot.get('quarterlyReportLabel') or '鏈€鏂板崟瀛ｅ害'}褰掓瘝鍑€鍒╂鼎鍚屾瘮"
+            f" {_yoy_text(financial_snapshot.get('quarterlyParentNetProfitYoY'))}锛屽悗缁湅鏀跺叆鍜岀幇閲戞祦鏄惁缁х画鍖归厤銆?"
+        )
+
     return ShortTermOutlook(
         catalysts=deduped[:3] or ["[数据暂不可用]"],
         earningsExpectation=earnings_expectation,
@@ -473,6 +671,7 @@ def _build_valuation_outlook(
     highlights: List[dict],
     board_context: Optional[Dict[str, Any]],
     analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
 ) -> ValuationOutlook:
     pe = _metric_text(indicators.get("pe"), "x")
     pb = _metric_text(indicators.get("pb"), "x")
@@ -521,6 +720,7 @@ def _build_future_outlook(
     board_context: Optional[Dict[str, Any]],
     company_facts: Dict[str, Any],
     analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
 ) -> FutureOutlook:
     business_summary = str(company_facts.get("businessSummary") or "").strip()
     product_types = company_facts.get("productTypes") or []
@@ -549,6 +749,230 @@ def _build_future_outlook(
             targetRange=valuation_outlook.targetRange,
             upsideDrivers=valuation_outlook.upsideDrivers,
             downsideRisks=valuation_outlook.downsideRisks,
+        )
+
+    return FutureOutlook(
+        analystConsensus=analyst_consensus,
+        shortTermOutlook=short_term,
+        valuationOutlook=valuation_outlook,
+    )
+
+
+def _merge_generated_highlights(highlights: List[dict], generated: List[dict]) -> List[dict]:
+    merged = list(highlights)
+    seen = {(str(item.get("side") or ""), str(item.get("label") or "")) for item in merged}
+    for item in generated:
+        key = (str(item.get("side") or ""), str(item.get("label") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+    return sorted(merged, key=lambda item: int(item.get("score") or 0), reverse=True)
+
+
+def _enrich_market_impression_with_financials(market_impression: str, financial_snapshot: Dict[str, Any]) -> str:
+    if "最新财务截面" in market_impression or "年报归母净利润" in market_impression:
+        return market_impression
+
+    extra_bits: List[str] = []
+    annual_profit_yoy = financial_snapshot.get("annualParentNetProfitYoY")
+    quarterly_profit_yoy = financial_snapshot.get("quarterlyParentNetProfitYoY")
+    annual_revenue_yoy = financial_snapshot.get("annualRevenueYoY")
+    dividend_per10 = financial_snapshot.get("latestDividendPer10")
+
+    if annual_profit_yoy is not None or quarterly_profit_yoy is not None:
+        extra_bits.append(
+            f"最新财务截面上，年报归母净利润同比 {_yoy_text(annual_profit_yoy)}，最新季度同比 {_yoy_text(quarterly_profit_yoy)}。"
+        )
+    if annual_revenue_yoy is not None and annual_revenue_yoy < 0:
+        extra_bits.append(f"但收入端仍有压力，年报营收同比 {_yoy_text(annual_revenue_yoy)}。")
+    if dividend_per10 is not None and dividend_per10 > 0:
+        extra_bits.append(f"公司还披露了每10股派息 {dividend_per10:.2f} 元的分红方案。")
+
+    if not extra_bits:
+        return market_impression
+    return f"{market_impression} {' '.join(extra_bits)}"[:520]
+
+
+def _build_consensus_card(
+    summary_sentiment: str,
+    market_impression: str,
+    board_context: Optional[Dict[str, Any]],
+    analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
+) -> AnalystConsensus:
+    stance = (analyst_snapshot or {}).get("stance") or _consensus_stance(summary_sentiment)
+    parts = [market_impression.strip()]
+    if board_context and board_context.get("roleReason"):
+        parts.append(str(board_context["roleReason"]).strip())
+    if (analyst_snapshot or {}).get("ratingSummary"):
+        parts.append(f"机构评级分布为 {(analyst_snapshot or {}).get('ratingSummary')}。")
+    if (analyst_snapshot or {}).get("targetRange") and (analyst_snapshot or {}).get("targetRange") != "[数据暂不可用]":
+        target_text = f"可见目标价区间 {(analyst_snapshot or {}).get('targetRange')}"
+        if (analyst_snapshot or {}).get("targetSpace"):
+            target_text += f"，对应空间 {(analyst_snapshot or {}).get('targetSpace')}"
+        parts.append(target_text + "。")
+    if (financial_snapshot or {}).get("annualParentNetProfitYoY") is not None:
+        parts.append(
+            f"年报归母净利润同比 {_yoy_text((financial_snapshot or {}).get('annualParentNetProfitYoY'))}，"
+            f"最新季度同比 {_yoy_text((financial_snapshot or {}).get('quarterlyParentNetProfitYoY'))}。"
+        )
+    rationale = " ".join(part for part in parts if part)[:260] or "[数据暂不可用]"
+    return AnalystConsensus(stance=stance, rationale=rationale)
+
+
+def _build_short_term_outlook_card(
+    highlights: List[dict],
+    news: List[dict],
+    analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
+) -> ShortTermOutlook:
+    catalysts: List[str] = []
+    if (financial_snapshot or {}).get("latestDividendPer10"):
+        catalysts.append(
+            f"分红方案落地进度：每10股派息 {(financial_snapshot or {}).get('latestDividendPer10'):.2f} 元，当前进度 {(financial_snapshot or {}).get('latestDividendProgress') or '[数据暂不可用]'}。"
+        )
+    if (financial_snapshot or {}).get("quarterlyParentNetProfitYoY") is not None:
+        catalysts.append(
+            f"{(financial_snapshot or {}).get('quarterlyReportLabel') or '最新季度'}业绩验证：归母净利润同比 {_yoy_text((financial_snapshot or {}).get('quarterlyParentNetProfitYoY'))}。"
+        )
+    report_titles = (analyst_snapshot or {}).get("reportTitles") or []
+    for item in report_titles[:2]:
+        title = str(item.get("title") or "").strip()
+        if title:
+            catalysts.append(f"券商跟踪重点：{title}")
+    for item in highlights:
+        text = str(item.get("importance") or item.get("why") or item.get("label") or "").strip()
+        if text:
+            catalysts.append(text[:80])
+        if len(catalysts) >= 4:
+            break
+    if len(catalysts) < 3:
+        for item in news[:3]:
+            title = str(item.get("title") or "").strip()
+            if title:
+                catalysts.append(title[:80])
+            if len(catalysts) >= 3:
+                break
+
+    deduped: List[str] = []
+    seen = set()
+    for item in catalysts:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+        if len(deduped) >= 3:
+            break
+
+    eps_forecasts = (analyst_snapshot or {}).get("epsForecasts") or []
+    if eps_forecasts and eps_forecasts[0].get("avgEps") is not None:
+        first = eps_forecasts[0]
+        institution_text = ""
+        if first.get("institutionCount"):
+            institution_text = f"，基于 {first.get('institutionCount')} 家机构预测"
+        earnings_expectation = (
+            f"{first.get('year') or ''} 年机构一致预期 EPS 约 {first.get('avgEps'):.2f}"
+            f"{institution_text}。"
+        )
+    elif (financial_snapshot or {}).get("quarterlyParentNetProfitYoY") is not None:
+        earnings_expectation = (
+            f"{(financial_snapshot or {}).get('quarterlyReportLabel') or '最新季度'}归母净利润同比"
+            f" {_yoy_text((financial_snapshot or {}).get('quarterlyParentNetProfitYoY'))}，后续看收入和现金流是否继续匹配。"
+        )
+    else:
+        earnings_expectation = "[数据暂不可用]"
+
+    return ShortTermOutlook(
+        catalysts=deduped or ["[数据暂不可用]"],
+        earningsExpectation=earnings_expectation,
+    )
+
+
+def _build_valuation_outlook_card(
+    indicators: dict,
+    highlights: List[dict],
+    board_context: Optional[Dict[str, Any]],
+    analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
+) -> ValuationOutlook:
+    pe = _metric_text(indicators.get("pe"), "x")
+    pb = _metric_text(indicators.get("pb"), "x")
+    roe = _metric_text(indicators.get("roe"), "%")
+    current_level = f"当前估值：PE {pe}，PB {pb}，ROE {roe}。"
+    if (financial_snapshot or {}).get("annualParentNetProfitYoY") is not None:
+        current_level += (
+            f" 最新年报归母净利润同比 {_yoy_text((financial_snapshot or {}).get('annualParentNetProfitYoY'))}，"
+            "需要把利润兑现和当前估值一起看。"
+        )
+
+    target_range = (analyst_snapshot or {}).get("targetRange") or "[数据暂不可用]"
+    if (analyst_snapshot or {}).get("targetSpace") and target_range != "[数据暂不可用]":
+        target_range = f"{target_range}（相对当前空间 {(analyst_snapshot or {}).get('targetSpace')}）"
+
+    upside_drivers: List[str] = []
+    downside_risks: List[str] = []
+    for item in highlights:
+        text = str(item.get("importance") or item.get("label") or "").strip()
+        if item.get("side") == "positive" and text and len(upside_drivers) < 3:
+            upside_drivers.append(text[:88])
+        if item.get("side") == "risk" and text and len(downside_risks) < 3:
+            downside_risks.append(text[:88])
+    if board_context and board_context.get("summary") and len(upside_drivers) < 3:
+        upside_drivers.append(str(board_context.get("summary"))[:88])
+    if (financial_snapshot or {}).get("quarterlyParentNetProfitYoY") is not None and len(upside_drivers) < 3:
+        upside_drivers.append(
+            f"{(financial_snapshot or {}).get('quarterlyReportLabel') or '最新季度'}归母净利润同比 {_yoy_text((financial_snapshot or {}).get('quarterlyParentNetProfitYoY'))}。"
+        )
+    if (financial_snapshot or {}).get("latestDividendPer10") is not None and len(upside_drivers) < 3:
+        upside_drivers.append(
+            f"最新分红方案为每10股派息 {(financial_snapshot or {}).get('latestDividendPer10'):.2f} 元，对估值和安全边际有支撑。"
+        )
+    if (financial_snapshot or {}).get("annualRevenueYoY") is not None and (financial_snapshot or {}).get("annualRevenueYoY") < 0 and len(downside_risks) < 3:
+        downside_risks.append(
+            f"年报营收同比 {_yoy_text((financial_snapshot or {}).get('annualRevenueYoY'))}，如果收入修复不及预期，估值修复空间会受限。"
+        )
+
+    return ValuationOutlook(
+        currentLevel=current_level,
+        targetRange=target_range,
+        upsideDrivers=upside_drivers or ["[数据暂不可用]"],
+        downsideRisks=downside_risks or ["[数据暂不可用]"],
+    )
+
+
+def _build_future_outlook_card(
+    sentiment: str,
+    market_impression: str,
+    indicators: dict,
+    highlights: List[dict],
+    news: List[dict],
+    board_context: Optional[Dict[str, Any]],
+    company_facts: Dict[str, Any],
+    analyst_snapshot: Optional[Dict[str, Any]],
+    financial_snapshot: Optional[Dict[str, Any]],
+) -> FutureOutlook:
+    business_summary = str(company_facts.get("businessSummary") or "").strip()
+    analyst_consensus = _build_consensus_card(
+        sentiment,
+        market_impression,
+        board_context,
+        analyst_snapshot,
+        financial_snapshot,
+    )
+    short_term = _build_short_term_outlook_card(highlights, news, analyst_snapshot, financial_snapshot)
+    valuation_outlook = _build_valuation_outlook_card(
+        indicators,
+        highlights,
+        board_context,
+        analyst_snapshot,
+        financial_snapshot,
+    )
+
+    if business_summary and short_term.earningsExpectation != "[数据暂不可用]":
+        short_term = ShortTermOutlook(
+            catalysts=short_term.catalysts,
+            earningsExpectation=f"{short_term.earningsExpectation} 同时继续跟踪主营“{business_summary}”里的核心业务兑现进度。",
         )
 
     return FutureOutlook(
@@ -613,8 +1037,12 @@ async def _build_highlights_response(
     )
 
     stock_price = all_prices.get(code, {"price": 0.0, "pct": 0.0})
-    analyst_snapshot = await asyncio.to_thread(fetch_analyst_snapshot, code, float(stock_price["price"]))
+    analyst_snapshot, financial_snapshot = await asyncio.gather(
+        asyncio.to_thread(fetch_analyst_snapshot, code, float(stock_price["price"])),
+        asyncio.to_thread(fetch_financial_snapshot, code),
+    )
     highlights = analyze_highlights(raw_ann)
+    highlights = _merge_generated_highlights(highlights, _build_financial_highlights(code, financial_snapshot))
     news = news or _build_news_fallback(highlights, stock_price)
     board_context = await asyncio.to_thread(
         fetch_board_context,
@@ -631,9 +1059,9 @@ async def _build_highlights_response(
     positives = [item for item in highlights if item["side"] == "positive"]
     if not positives:
         supplemental_positives = _build_supplemental_positive_highlights(code, company_facts, indicators)
-        highlights.extend(supplemental_positives)
+        highlights = _merge_generated_highlights(highlights, supplemental_positives)
         positives = [item for item in highlights if item["side"] == "positive"]
-        highlights = sorted(highlights, key=lambda item: item["score"], reverse=True)
+        risks = [item for item in highlights if item["side"] == "risk"]
     sentiment = _rule_sentiment(len(risks), len(positives))
 
     market_impression = _build_rule_market_impression(
@@ -644,7 +1072,9 @@ async def _build_highlights_response(
         hotness,
         indicators,
         board_context,
+        financial_snapshot,
     )
+    market_impression = _enrich_market_impression_with_financials(market_impression, financial_snapshot)
     headline = None
     analysis_mode = "rules"
     analysis_model = None
@@ -666,6 +1096,7 @@ async def _build_highlights_response(
         hotness=hotness,
         price_info=stock_price,
         company_facts=company_facts,
+        financial_snapshot=financial_snapshot,
         profile=profile,
     )
 
@@ -697,6 +1128,7 @@ async def _build_highlights_response(
             hotness,
             stock_price,
             company_facts,
+            financial_snapshot,
             profile,
         )
 
@@ -705,7 +1137,7 @@ async def _build_highlights_response(
         pb=_metric_text(indicators.get("pb")),
         roe=_metric_text(indicators.get("roe")),
     )
-    future_outlook = _build_future_outlook(
+    future_outlook = _build_future_outlook_card(
         sentiment,
         market_impression,
         indicators,
@@ -714,6 +1146,7 @@ async def _build_highlights_response(
         board_context,
         company_facts,
         analyst_snapshot,
+        financial_snapshot,
     )
     if ai_summary:
         future_outlook = _merge_ai_future_outlook(future_outlook, ai_summary)

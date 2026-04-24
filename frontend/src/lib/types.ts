@@ -79,7 +79,7 @@ export type ValuationSnapshot = {
 };
 
 export type AnalystConsensus = {
-  stance: '看好' | '中性' | '看空';
+  stance: string;
   rationale: string;
 };
 

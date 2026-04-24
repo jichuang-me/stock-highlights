@@ -217,6 +217,7 @@ def _build_context(
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
     company_facts: Optional[Dict[str, Any]] = None,
+    financial_snapshot: Optional[Dict[str, Any]] = None,
     profile: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     return {
@@ -231,6 +232,16 @@ def _build_context(
             "businessSummary": (company_facts or {}).get("businessSummary", ""),
             "productTypes": (company_facts or {}).get("productTypes", []),
             "productNames": (company_facts or {}).get("productNames", []),
+        },
+        "financialSnapshot": {
+            "annualReportLabel": (financial_snapshot or {}).get("annualReportLabel", ""),
+            "annualRevenueYoY": (financial_snapshot or {}).get("annualRevenueYoY"),
+            "annualParentNetProfitYoY": (financial_snapshot or {}).get("annualParentNetProfitYoY"),
+            "quarterlyReportLabel": (financial_snapshot or {}).get("quarterlyReportLabel", ""),
+            "quarterlyParentNetProfitYoY": (financial_snapshot or {}).get("quarterlyParentNetProfitYoY"),
+            "quarterlyOperateCashYoY": (financial_snapshot or {}).get("quarterlyOperateCashYoY"),
+            "latestDividendPer10": (financial_snapshot or {}).get("latestDividendPer10"),
+            "latestDividendProgress": (financial_snapshot or {}).get("latestDividendProgress", ""),
         },
         "announcements": [item.get("announcementTitle", "") for item in announcements[:8]],
         "focusHighlights": [
@@ -333,9 +344,10 @@ def get_cached_ai_summary(
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
     company_facts: Optional[Dict[str, Any]] = None,
+    financial_snapshot: Optional[Dict[str, Any]] = None,
     profile: Optional[Dict[str, str]] = None,
 ) -> tuple[Optional[Dict[str, Any]], str]:
-    context = _build_context(code, name, indicators, news, announcements, highlights, hotness, price_info, company_facts, profile)
+    context = _build_context(code, name, indicators, news, announcements, highlights, hotness, price_info, company_facts, financial_snapshot, profile)
     key = _cache_key(context)
 
     with _analysis_lock:
@@ -357,6 +369,7 @@ def queue_ai_summary(
     hotness: Dict[str, Any],
     price_info: Dict[str, Any],
     company_facts: Optional[Dict[str, Any]] = None,
+    financial_snapshot: Optional[Dict[str, Any]] = None,
     profile: Optional[Dict[str, str]] = None,
 ) -> bool:
     if not has_ai_provider(profile):
@@ -367,7 +380,7 @@ def queue_ai_summary(
             return True
         _analysis_jobs.add(key)
 
-    context = _build_context(code, name, indicators, news, announcements, highlights, hotness, price_info, company_facts, profile)
+    context = _build_context(code, name, indicators, news, announcements, highlights, hotness, price_info, company_facts, financial_snapshot, profile)
     thread = threading.Thread(target=_run_ai_summary, args=(key, context, profile), daemon=True)
     thread.start()
     return True
