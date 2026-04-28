@@ -25,8 +25,29 @@ import type {
 const RECENT_STOCKS_KEY = 'stock-highlights:recent-stocks:v2';
 const WATCHLIST_KEY = 'stock-highlights:watchlist:v2';
 const ACTIVE_MODEL_PROFILE_KEY = 'stock-highlights:active-model-profile:v2';
+const CUSTOM_MODEL_PROFILES_KEY = 'stock-highlights:custom-model-profiles:v3';
 
-const DEFAULT_MODEL_PROFILES: AnalysisProfile[] = [
+type ModelPreset = {
+  id: string;
+  label: string;
+  vendor: string;
+  baseUrl: string;
+  model: string;
+  note: string;
+  kind: AnalysisProfile['kind'];
+};
+
+type CustomProfileForm = {
+  id?: string;
+  label: string;
+  vendor: string;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+  kind: AnalysisProfile['kind'];
+};
+
+const BUILTIN_MODEL_PROFILES: AnalysisProfile[] = [
   {
     id: 'server-auto',
     label: 'HF 免费优先',
@@ -54,16 +75,62 @@ const DEFAULT_MODEL_PROFILES: AnalysisProfile[] = [
     model: 'Qwen/Qwen3-32B',
     note: '速度更轻，适合快速复核。',
   },
+];
+
+const CUSTOM_MODEL_PRESETS: ModelPreset[] = [
   {
-    id: 'custom-openai',
-    label: '自定义 API',
+    id: 'openai',
+    label: 'ChatGPT / OpenAI',
+    vendor: 'openai',
+    baseUrl: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-4o-mini',
     kind: 'api',
-    mode: 'custom',
+    note: '兼容 OpenAI Chat Completions。',
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    vendor: 'deepseek',
+    baseUrl: 'https://api.deepseek.com/chat/completions',
+    model: 'deepseek-chat',
+    kind: 'api',
+    note: '支持 deepseek-chat / deepseek-reasoner。',
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    vendor: 'gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    model: 'gemini-2.0-flash',
+    kind: 'api',
+    note: '使用 Google OpenAI 兼容入口。',
+  },
+  {
+    id: 'qwen',
+    label: 'Qwen / DashScope',
+    vendor: 'qwen',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    model: 'qwen-plus',
+    kind: 'api',
+    note: '阿里云百炼 OpenAI 兼容模式，可改成 qwen3 系列。',
+  },
+  {
+    id: 'local',
+    label: '本地兼容接口',
+    vendor: 'local',
+    baseUrl: 'http://127.0.0.1:11434/v1/chat/completions',
+    model: 'qwen3:8b',
+    kind: 'local',
+    note: '仅在服务端能访问该地址时可用。',
+  },
+  {
+    id: 'compatible',
+    label: '其他兼容接口',
     vendor: 'openai-compatible',
-    model: '',
     baseUrl: '',
-    apiKey: '',
-    note: '填写 OpenAI 兼容接口地址、模型名和 API Key。',
+    model: '',
+    kind: 'api',
+    note: '填写任意 OpenAI-compatible 地址。',
   },
 ];
 
@@ -84,6 +151,53 @@ function loadJson<T>(key: string, fallback: T): T {
 
 function saveJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function customFormFromPreset(preset: ModelPreset): CustomProfileForm {
+  return {
+    label: preset.label,
+    vendor: preset.vendor,
+    model: preset.model,
+    baseUrl: preset.baseUrl,
+    apiKey: '',
+    kind: preset.kind,
+  };
+}
+
+function customFormFromProfile(profile: AnalysisProfile): CustomProfileForm {
+  return {
+    id: profile.id,
+    label: profile.label,
+    vendor: profile.vendor || 'openai-compatible',
+    model: profile.model || '',
+    baseUrl: profile.baseUrl || '',
+    apiKey: profile.apiKey || '',
+    kind: profile.kind,
+  };
+}
+
+function customProfileFromForm(form: CustomProfileForm): AnalysisProfile {
+  const label = form.label.trim() || CUSTOM_MODEL_PRESETS.find((preset) => preset.vendor === form.vendor)?.label || '自定义模型';
+  return {
+    id: form.id || `custom-${Date.now()}`,
+    label,
+    kind: form.kind,
+    mode: 'custom',
+    vendor: form.vendor.trim() || 'openai-compatible',
+    model: form.model.trim(),
+    baseUrl: form.baseUrl.trim(),
+    apiKey: form.apiKey.trim(),
+    note: `${form.vendor || 'OpenAI-compatible'} · ${form.model.trim() || '未填写模型'}`,
+  };
+}
+
+function mergeModelProfiles(customProfiles: AnalysisProfile[]) {
+  const custom = customProfiles.filter((profile) => profile.mode === 'custom' && profile.baseUrl && profile.model);
+  return [...BUILTIN_MODEL_PROFILES, ...custom];
+}
+
+function presetIdForVendor(vendor: string) {
+  return CUSTOM_MODEL_PRESETS.find((preset) => preset.vendor === vendor)?.id || 'compatible';
 }
 
 function pctText(value: number) {
@@ -394,13 +508,19 @@ export default function StockInsightCardApp() {
   const [watchlist, setWatchlist] = useState<SearchStock[]>(() => loadJson(WATCHLIST_KEY, []));
   const [recent, setRecent] = useState<SearchStock[]>(() => loadJson(RECENT_STOCKS_KEY, []));
   const [activeProfileId, setActiveProfileId] = useState(() => window.localStorage.getItem(ACTIVE_MODEL_PROFILE_KEY) || 'server-auto');
+  const [modelProfiles, setModelProfiles] = useState<AnalysisProfile[]>(() => mergeModelProfiles(loadJson(CUSTOM_MODEL_PROFILES_KEY, [])));
+  const [selectedPresetId, setSelectedPresetId] = useState(CUSTOM_MODEL_PRESETS[0].id);
+  const [customForm, setCustomForm] = useState<CustomProfileForm>(() => customFormFromPreset(CUSTOM_MODEL_PRESETS[0]));
   const [sourceRef, setSourceRef] = useState<SourceRef | null>(null);
   const [detailItem, setDetailItem] = useState<HighlightItem | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const initialAutoSelectRef = useRef(Boolean(initialQuery));
 
-  const activeProfile = DEFAULT_MODEL_PROFILES.find((profile) => profile.id === activeProfileId) || DEFAULT_MODEL_PROFILES[0];
+  const activeProfile = useMemo(
+    () => modelProfiles.find((profile) => profile.id === activeProfileId) || modelProfiles[0] || BUILTIN_MODEL_PROFILES[0],
+    [activeProfileId, modelProfiles],
+  );
   const { results, loading: searching, error: searchError } = useStockSearch(query);
   const { data, loading, error, refreshAnalysis } = useStockHighlights(selected?.code || '', activeProfile);
   const { refs, map: citationMap } = useMemo(() => makeCitationIndex(data), [data]);
@@ -433,6 +553,42 @@ export default function StockInsightCardApp() {
   useEffect(() => {
     saveJson(RECENT_STOCKS_KEY, recent);
   }, [recent]);
+
+  useEffect(() => {
+    saveJson(
+      CUSTOM_MODEL_PROFILES_KEY,
+      modelProfiles.filter((profile) => profile.mode === 'custom'),
+    );
+  }, [modelProfiles]);
+
+  function activateProfile(profile: AnalysisProfile) {
+    setActiveProfileId(profile.id);
+    window.localStorage.setItem(ACTIVE_MODEL_PROFILE_KEY, profile.id);
+    if (profile.mode === 'custom') {
+      setCustomForm(customFormFromProfile(profile));
+      setSelectedPresetId(presetIdForVendor(profile.vendor));
+    }
+  }
+
+  function applyPreset(preset: ModelPreset) {
+    setSelectedPresetId(preset.id);
+    setCustomForm((form) => ({
+      ...customFormFromPreset(preset),
+      id: form.id,
+      apiKey: preset.vendor === form.vendor ? form.apiKey : '',
+    }));
+  }
+
+  function saveCustomProfile() {
+    const profile = customProfileFromForm(customForm);
+    if (!profile.baseUrl || !profile.model) return;
+    setModelProfiles((profiles) => {
+      const builtins = profiles.filter((item) => item.mode !== 'custom');
+      const custom = profiles.filter((item) => item.mode === 'custom' && item.id !== profile.id);
+      return [...builtins, profile, ...custom].slice(0, 15);
+    });
+    activateProfile(profile);
+  }
 
   function selectStock(stock: SearchStock) {
     setSelected(stock);
@@ -695,12 +851,12 @@ export default function StockInsightCardApp() {
       {modelOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4" onClick={() => setModelOpen(false)}>
           <div
-            className="max-h-[90vh] w-[min(96vw,42rem)] overflow-y-auto rounded-xl border border-white/10 bg-slate-950 p-5 text-slate-100 shadow-2xl"
+            className="max-h-[90vh] w-[min(96vw,52rem)] overflow-y-auto rounded-xl border border-white/10 bg-slate-950 p-5 text-slate-100 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-xl font-semibold text-white">AI研判</h3>
+                <h3 className="text-xl font-semibold text-white">AI 模型接口</h3>
                 <p className="mt-1 text-sm text-slate-400">
                   当前：{activeProfile.label} · {data?.analysisMode === 'ai' ? data.analysisModel || 'AI' : '规则回退'}
                 </p>
@@ -709,15 +865,12 @@ export default function StockInsightCardApp() {
                 关闭
               </button>
             </div>
-            <div className="mt-5 grid gap-3">
-              {DEFAULT_MODEL_PROFILES.map((profile) => (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {modelProfiles.map((profile) => (
                 <button
                   key={profile.id}
                   type="button"
-                  onClick={() => {
-                    setActiveProfileId(profile.id);
-                    window.localStorage.setItem(ACTIVE_MODEL_PROFILE_KEY, profile.id);
-                  }}
+                  onClick={() => activateProfile(profile)}
                   className={`rounded-lg border p-4 text-left ${
                     profile.id === activeProfileId
                       ? 'border-cyan-400/50 bg-cyan-500/10'
@@ -729,6 +882,104 @@ export default function StockInsightCardApp() {
                 </button>
               ))}
             </div>
+            <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">自定义接口</div>
+                  <div className="text-xs text-slate-400">API Key 仅保存在当前浏览器，并随请求发给后端调用模型。</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {CUSTOM_MODEL_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset)}
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        selectedPresetId === preset.id
+                          ? 'border-cyan-300 bg-cyan-400/15 text-cyan-100'
+                          : 'border-white/10 bg-slate-950 text-slate-300 hover:border-white/25'
+                      }`}
+                      title={preset.note}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-xs text-slate-400">
+                  显示名称
+                  <input
+                    value={customForm.label}
+                    onChange={(event) => setCustomForm((form) => ({ ...form, label: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+                    placeholder="例如 DeepSeek 短线分析"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-slate-400">
+                  模型名
+                  <input
+                    value={customForm.model}
+                    onChange={(event) => setCustomForm((form) => ({ ...form, model: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+                    placeholder="deepseek-chat / gemini-2.0-flash / qwen-plus"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-slate-400 sm:col-span-2">
+                  接口地址
+                  <input
+                    value={customForm.baseUrl}
+                    onChange={(event) => setCustomForm((form) => ({ ...form, baseUrl: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+                    placeholder="https://api.deepseek.com/chat/completions"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-slate-400">
+                  API Key
+                  <input
+                    value={customForm.apiKey}
+                    onChange={(event) => setCustomForm((form) => ({ ...form, apiKey: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+                    placeholder="sk-..."
+                    type="password"
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-slate-400">
+                  类型
+                  <select
+                    value={customForm.kind}
+                    onChange={(event) => setCustomForm((form) => ({ ...form, kind: event.target.value as AnalysisProfile['kind'] }))}
+                    className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-cyan-400"
+                  >
+                    <option value="api">API</option>
+                    <option value="local">本地</option>
+                  </select>
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={saveCustomProfile}
+                  disabled={!customForm.baseUrl.trim() || !customForm.model.trim()}
+                  className="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  保存并使用
+                </button>
+                {activeProfile.mode === 'custom' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModelProfiles((profiles) => profiles.filter((profile) => profile.id !== activeProfile.id));
+                      activateProfile(BUILTIN_MODEL_PROFILES[0]);
+                    }}
+                    className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100"
+                  >
+                    删除当前自定义
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <div className="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -737,7 +988,7 @@ export default function StockInsightCardApp() {
                 className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 disabled:opacity-40"
               >
                 <RefreshCcw className="h-4 w-4" />
-                重算AI
+                重算 AI
               </button>
               {data?.analysisPending ? <span className="text-sm text-amber-200">AI正在生成，稍后自动刷新。</span> : null}
             </div>

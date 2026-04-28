@@ -21,37 +21,26 @@ _analysis_jobs: set[str] = set()
 _analysis_lock = threading.Lock()
 
 SYSTEM_PROMPT = """
-你是一名面向 A 股的中文个股看点分析助手。
-你的目标不是复述资讯，而是基于给定的公告、快讯、价格、热度、公司主营和估值信息，
-生成更接近投资研究卡片的结论，兼顾价值投资视角和短期催化判断。
+你是一名面向 A 股的中文个股看点分析助手。目标不是复述资讯，而是基于给定的公告、快讯、价格、热度、主营、财务和估值信息，生成接近专业投研卡片的结构化结论，兼顾价值投资框架和短线催化判断。
 
-如果上下文里有 focusHighlights，你必须优先围绕这些焦点看点写结论，
-不要重新罗列一批重复标题。请优先抓最重要的一条主线或最关键矛盾，
-并在 marketImpression 中明确提到：
-1. 当前最强驱动是什么
-2. 当前关键证据是什么
-3. 接下来要验证或防守的点是什么
+请严格只返回 JSON，不要输出 Markdown。缺少数据时写「[数据暂不可用]」，不要编造具体数字。
 
-除了 headline 和 marketImpression，还请尽量返回更完整的结构化字段，
-让结果更接近“市场印象 / 分析师共识 / 短期预期 / 估值变化预期”四块卡片。
-如果某项没有把握，可以留空，不要编造具体数字。
-
-请严格返回 JSON，格式如下：
+输出字段：
 {
-  "headline": "一句话短线结论，18字以内",
-  "marketImpression": "120字以内，说明当前最强驱动、情绪位置、当前关键证据和需要盯防的验证点",
+  "headline": "一句话结论，32字以内",
+  "marketImpression": "市场印象，说明公司定位、最强驱动、当前证据、情绪位置和下一步验证点，220字以内",
   "sentiment": "positive | negative | neutral",
-  "topPositiveLabel": "从 focusHighlights 里选最该交易的亮点标签，没有就留空",
-  "topRiskLabel": "从 focusHighlights 里选最该防守的风险标签，没有就留空",
-  "keyTurningPoint": "一句话写出当前最重要的转折观察点",
+  "topPositiveLabel": "最重要亮点标签，没有则留空",
+  "topRiskLabel": "最重要风险标签，没有则留空",
+  "keyTurningPoint": "当前最重要的观察转折点，120字以内",
   "analystConsensusStance": "看好 | 中性 | 看空",
-  "analystConsensusRationale": "100字以内，说明整体看法和主要逻辑",
-  "shortTermCatalysts": ["1-3个月内最值得跟踪的催化剂，最多3条"],
-  "shortTermEarningsExpectation": "80字以内，说明1-3个月内业绩或经营验证重点",
-  "valuationCurrentLevel": "80字以内，概括当前估值所处状态，不必强行给数字",
+  "analystConsensusRationale": "分析师共识与主要逻辑，180字以内",
+  "shortTermCatalysts": ["1-3个月最值得跟踪的催化剂，最多3条"],
+  "shortTermEarningsExpectation": "1-3个月业绩或经营验证重点，160字以内",
+  "valuationCurrentLevel": "当前估值状态，180字以内",
   "valuationTargetRange": "目标估值区间或[数据暂不可用]",
-  "valuationUpsideDrivers": ["上行驱动，最多3条"],
-  "valuationDownsideRisks": ["下行风险，最多3条"]
+  "valuationUpsideDrivers": ["估值上行驱动，最多3条"],
+  "valuationDownsideRisks": ["估值下行风险，最多3条"]
 }
 """
 
@@ -88,6 +77,25 @@ def _extract_json(content: str) -> Optional[Dict[str, Any]]:
             return None
 
 
+def _normalize_chat_completions_url(base_url: str) -> str:
+    url = base_url.strip().rstrip("/")
+    if not url:
+        return url
+
+    lower = url.lower()
+    if lower.endswith("/chat/completions"):
+        return url
+    if "generativelanguage.googleapis.com" in lower:
+        return f"{url}/chat/completions" if lower.endswith("/openai") else f"{url}/v1beta/openai/chat/completions"
+    if "dashscope.aliyuncs.com" in lower:
+        return f"{url}/chat/completions" if lower.endswith("/v1") else f"{url}/compatible-mode/v1/chat/completions"
+    if "deepseek.com" in lower:
+        return f"{url}/chat/completions"
+    if lower.endswith("/v1") or lower.endswith("/v1/"):
+        return f"{url}/chat/completions"
+    return f"{url}/v1/chat/completions"
+
+
 def _call_openai_compatible(
     base_url: str,
     model: str,
@@ -98,23 +106,32 @@ def _call_openai_compatible(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    response = requests.post(
-        base_url,
-        headers=headers,
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_input},
-            ],
-            "response_format": {"type": "json_object"},
-            "temperature": 0.2,
-        },
-        timeout=max(REQUEST_TIMEOUT, 25),
-    )
-    response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    return _extract_json(content)
+    endpoint = _normalize_chat_completions_url(base_url)
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_input},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+
+    for attempt in range(2):
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload if attempt == 0 else {k: v for k, v in payload.items() if k != "response_format"},
+            timeout=max(REQUEST_TIMEOUT, 25),
+        )
+        if response.ok:
+            content = response.json()["choices"][0]["message"]["content"]
+            return _extract_json(content)
+        if attempt == 0 and response.status_code in {400, 422}:
+            logging.info("Retrying AI call without response_format for %s", endpoint)
+            continue
+        response.raise_for_status()
+    return None
 
 
 def _call_builtin_model(vendor: str, model: str, user_input: str) -> Optional[Dict[str, Any]]:
@@ -179,6 +196,10 @@ def _normalize_result(result: Dict[str, Any], model_name: str, profile_label: st
         sentiment = "neutral"
     if analyst_consensus_stance not in {"看好", "中性", "看空"}:
         analyst_consensus_stance = ""
+
+    normalized_stance = str(result.get("analystConsensusStance", "")).strip()
+    if normalized_stance in {"看好", "中性", "看空"}:
+        analyst_consensus_stance = normalized_stance
 
     if not headline or not market_impression:
         return None
@@ -286,9 +307,8 @@ def _iter_attempts(profile: Optional[Dict[str, str]]) -> List[Dict[str, str]]:
 
 def _run_ai_summary(key: str, context: Dict[str, Any], profile: Optional[Dict[str, str]]) -> None:
     user_input = (
-        "请根据以下个股上下文生成短线结论。"
-        "如果存在 focusHighlights，请只抓最重要的一条主线，优先引用其中的当前关键证据和后续验证点。"
-        "不要把多个重复公告分别讲一遍。\n"
+        "请根据下面个股上下文生成个股看点卡片。优先形成市场印象、亮点、风险、未来预期，"
+        "每个结论都要基于上下文中的公告、快讯、财务、主营或价格信息；数据缺失时写[数据暂不可用]。\n"
         f"{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
 

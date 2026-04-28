@@ -130,7 +130,12 @@ def _build_rule_market_impression(
     product_types = company_facts.get("productTypes") or []
     key_business = business_summary or (f"主营覆盖 {product_types[0]}" if product_types else "")
     industry_label = board_context.get("industry") if board_context else ""
-    if not industry_label or industry_label in {"深A", "沪A", "北A", "创业板", "科创板"}:
+    if (
+        not industry_label
+        or industry_label in {"深A", "沪A", "北A", "创业板", "科创板"}
+        or len(str(industry_label)) > 12
+        or "业务" in str(industry_label)
+    ):
         industry_label = industry
     has_new_materials = any(
         keyword in f"{business_summary} {' '.join(product_types)}"
@@ -140,8 +145,9 @@ def _build_rule_market_impression(
     profile_parts: List[str] = []
     if key_business:
         if has_new_materials and ("家纺" in key_business or "纺织" in key_business):
+            base_label = "家纺" if "家纺" in key_business else (industry_label or "传统主业")
             profile_parts.append(
-                f"市场更容易把 {company_name} 看成“{industry_label or '传统制造'} + 新材料”双主业公司，{key_business.rstrip('。')}。"
+                f"市场更容易把 {company_name} 看成“{base_label} + 新材料”双主业公司，{key_business.rstrip('。')}。"
             )
         else:
             profile_parts.append(
@@ -157,7 +163,9 @@ def _build_rule_market_impression(
         profile_parts.append("当前公告侧没有形成特别强的新主线，更多是等待经营和价格层面的新验证。")
 
     if board_context and board_context.get("roleReason"):
-        profile_parts.append(board_context["roleReason"])
+        role_reason = str(board_context["roleReason"]).strip()
+        if "还没完全确认" not in role_reason and "暂无" not in role_reason:
+            profile_parts.append(role_reason)
 
     pe = _metric_text(indicators.get("pe"), "x")
     pb = _metric_text(indicators.get("pb"), "x")
@@ -189,7 +197,7 @@ def _build_rule_market_impression(
     if rank and rank != "关注 0" and "暂不可用" not in rank:
         profile_parts.append(f"市场关注度方面，目前处于 {rank}。")
 
-    return " ".join(profile_parts)[:520] or "[数据暂不可用]"
+    return " ".join(profile_parts)[:650] or "[数据暂不可用]"
 
 
 def _impact_level(score: int) -> str:
